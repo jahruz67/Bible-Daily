@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 final class UpdateManager {
     static final String PREFS_NAME = "preferencias_lectura";
     static final String KEY_AUTO_UPDATES = "auto_updates_enabled";
+    static final String KEY_IS_ENGLISH = "is_english";
     static final String LATEST_JSON_URL =
             "https://github.com/jahruz67/Bible-Daily/releases/download/latest/latest.json";
     static final String APK_URL =
@@ -37,6 +38,14 @@ final class UpdateManager {
 
     static void setAutoUpdatesEnabled(Context context, boolean enabled) {
         preferences(context).edit().putBoolean(KEY_AUTO_UPDATES, enabled).apply();
+    }
+
+    static boolean isEnglish(Context context) {
+        return preferences(context).getBoolean(KEY_IS_ENGLISH, false);
+    }
+
+    static void setEnglish(Context context, boolean enabled) {
+        preferences(context).edit().putBoolean(KEY_IS_ENGLISH, enabled).apply();
     }
 
     static UpdateInfo fetchLatestUpdate(Context context) throws Exception {

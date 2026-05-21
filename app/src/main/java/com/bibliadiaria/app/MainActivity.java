@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
     private Calendar visibleMonthCalendar;
     private int loadGeneration;
     private float readingFontSp;
+    private boolean isEnglish;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,6 +86,7 @@ public class MainActivity extends Activity {
 
         preferences = getSharedPreferences("preferencias_lectura", MODE_PRIVATE);
         readingFontSp = preferences.getFloat("tamano_letra", 20f);
+        isEnglish = preferences.getBoolean("is_english", false);
         selectedDateCalendar = startOfDay(Calendar.getInstance());
         visibleMonthCalendar = startOfMonth(selectedDateCalendar);
         executor = Executors.newSingleThreadExecutor();
@@ -99,6 +101,16 @@ public class MainActivity extends Activity {
         super.onDestroy();
         if (executor != null) {
             executor.shutdownNow();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        boolean currentLanguage = UpdateManager.isEnglish(this);
+        if (currentLanguage != isEnglish) {
+            isEnglish = currentLanguage;
+            recreate();
         }
     }
 
@@ -201,7 +213,7 @@ public class MainActivity extends Activity {
         topRow.addView(createDateChip());
         header.addView(topRow);
 
-        TextView title = textView("Palabra del día", 34, COLOR_INK, Typeface.BOLD);
+        TextView title = textView(isEnglish ? "Word of the day" : "Palabra del día", 34, COLOR_INK, Typeface.BOLD);
         title.setIncludeFontPadding(false);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -245,7 +257,7 @@ public class MainActivity extends Activity {
         button.setGravity(Gravity.CENTER);
         button.setPadding(dp(16), 0, dp(16), 0);
         button.setBackground(roundedRect(COLOR_ACCENT, dp(8), Color.TRANSPARENT, 0));
-        button.setContentDescription("Abrir extras");
+        button.setContentDescription(isEnglish ? "Open extras" : "Abrir extras");
         button.setOnClickListener(view -> {
             calendarPanel.setVisibility(View.GONE);
             if (fontPanel != null) {
@@ -262,7 +274,7 @@ public class MainActivity extends Activity {
         chip.setGravity(Gravity.CENTER_VERTICAL);
         chip.setPadding(dp(12), dp(8), dp(10), dp(8));
         chip.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
-        chip.setContentDescription("Elegir fecha");
+        chip.setContentDescription(isEnglish ? "Choose date" : "Elegir fecha");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             chip.setElevation(dp(1));
         }
@@ -602,20 +614,8 @@ public class MainActivity extends Activity {
     }
 
     private void checkForUpdateOnStartup() {
-        if (!UpdateManager.isAutoUpdatesEnabled(this) || executor == null || executor.isShutdown()) {
-            return;
-        }
-
-        executor.submit(() -> {
-            try {
-                UpdateManager.UpdateInfo info = UpdateManager.fetchLatestUpdate(this);
-                if (info.updateAvailable) {
-                    runOnUiThread(() -> UpdateManager.showUpdateDialog(this, info));
-                }
-            } catch (Exception ignored) {
-                // Startup update checks stay quiet so daily readings remain the main experience.
-            }
-        });
+        // Auto updates are disabled as per user request. 
+        // We only keep the manual check in SettingsActivity.
     }
 
     private void loadSelectedDate() {
@@ -652,34 +652,40 @@ public class MainActivity extends Activity {
         sectionsLayout.removeAllViews();
         statusBlock.setVisibility(View.VISIBLE);
         dateText.setText(formatDisplayDate(date));
-        liturgyText.setText("Lecturas según la fecha del dispositivo.");
-        statusText.setText("Cargando la Palabra de hoy...");
+        liturgyText.setText(isEnglish ? "Readings according to device date." : "Lecturas según la fecha del dispositivo.");
+        statusText.setText(isEnglish ? "Loading today's Word..." : "Cargando la Palabra de hoy...");
         progressBar.setVisibility(View.VISIBLE);
         retryButton.setVisibility(View.GONE);
-        sourceText.setText("Fuente: Vatican News\n" + url);
+        sourceText.setText((isEnglish ? "Source: " : "Fuente: ") + "Vatican News\n" + url);
     }
 
     private void renderReading(DailyReading reading) {
         statusBlock.setVisibility(View.GONE);
         progressBar.setVisibility(View.GONE);
         retryButton.setVisibility(View.GONE);
-        statusText.setText("Actualizado desde Vatican News.");
+        statusText.setText(isEnglish ? "Updated from Vatican News." : "Actualizado desde Vatican News.");
 
         resizableTextViews.clear();
         sectionsLayout.removeAllViews();
 
         dateText.setText(reading.displayDate);
         if (reading.liturgicalTitle.isEmpty()) {
-            liturgyText.setText("Palabra del día");
+            liturgyText.setText(isEnglish ? "Word of the day" : "Palabra del día");
         } else {
             liturgyText.setText(reading.liturgicalTitle);
         }
 
-        addScriptureCard("Palabra de Dios", "Evangelio del Día", reading.gospel, true);
-        addScriptureCard("Lectura del Día", null, reading.firstReading, false);
-        addReflectionCard(reading.papalWords);
-
-        sourceText.setText("Fuente: Vatican News\n" + reading.sourceUrl);
+        if (isEnglish) {
+            addScriptureCard("Word of God", "Gospel of the Day", reading.gospel, true);
+            addScriptureCard("Reading of the Day", null, reading.firstReading, false);
+            addReflectionCard(reading.papalWords);
+            sourceText.setText("Source: Vatican News\n" + reading.sourceUrl);
+        } else {
+            addScriptureCard("Palabra de Dios", "Evangelio del Día", reading.gospel, true);
+            addScriptureCard("Lectura del Día", null, reading.firstReading, false);
+            addReflectionCard(reading.papalWords);
+            sourceText.setText("Fuente: Vatican News\n" + reading.sourceUrl);
+        }
         applyReadingFontSize();
     }
 
@@ -687,10 +693,11 @@ public class MainActivity extends Activity {
         statusBlock.setVisibility(View.VISIBLE);
         progressBar.setVisibility(View.GONE);
         retryButton.setVisibility(View.VISIBLE);
+        retryButton.setText(isEnglish ? "Retry" : "Reintentar");
         sectionsLayout.removeAllViews();
-        statusText.setText("No se pudo cargar la lectura de hoy. Revisa la conexión e intenta de nuevo.\n\n"
+        statusText.setText(isEnglish ? "Could not load today's reading. Check your connection and try again.\n\n" : "No se pudo cargar la lectura de hoy. Revisa la conexión e intenta de nuevo.\n\n"
                 + cleanErrorMessage(error));
-        sourceText.setText("Fuente prevista: Vatican News\n" + url);
+        sourceText.setText((isEnglish ? "Intended source: " : "Fuente prevista: ") + "Vatican News\n" + url);
     }
 
     private void addScriptureCard(String title, String overline, DailySection section, boolean featured) {
@@ -701,7 +708,7 @@ public class MainActivity extends Activity {
         LinearLayout card = createCard(featured ? dp(22) : dp(18));
 
         if (overline != null && !overline.isEmpty()) {
-            TextView overlineText = textView(overline.toUpperCase(spanishLocale), 12, COLOR_WARM, Typeface.BOLD);
+            TextView overlineText = textView(overline.toUpperCase(isEnglish ? Locale.US : spanishLocale), 12, COLOR_WARM, Typeface.BOLD);
             card.addView(overlineText);
         }
 
@@ -749,7 +756,7 @@ public class MainActivity extends Activity {
 
         LinearLayout card = createCard(dp(18));
 
-        TextView title = textView("Las palabras de los Papas", 22, COLOR_INK, Typeface.BOLD);
+        TextView title = textView(isEnglish ? "The Pope's words" : "Las palabras de los Papas", 22, COLOR_INK, Typeface.BOLD);
         title.setIncludeFontPadding(false);
         card.addView(title);
 
@@ -797,11 +804,11 @@ public class MainActivity extends Activity {
         connection.setConnectTimeout(12000);
         connection.setReadTimeout(12000);
         connection.setRequestProperty("User-Agent", "BibliaDiaria/1.0 Android");
-        connection.setRequestProperty("Accept-Language", "es-ES,es;q=0.9");
+        connection.setRequestProperty("Accept-Language", isEnglish ? "en-US,en;q=0.9" : "es-ES,es;q=0.9");
 
         int responseCode = connection.getResponseCode();
         if (responseCode < 200 || responseCode >= 300) {
-            throw new IOException("Vatican News respondió con código " + responseCode + ".");
+            throw new IOException(isEnglish ? "Vatican News responded with code " + responseCode + "." : "Vatican News respondió con código " + responseCode + ".");
         }
 
         try (InputStream stream = connection.getInputStream()) {
@@ -824,26 +831,41 @@ public class MainActivity extends Activity {
     }
 
     private DailyReading parseDailyReading(String html, Date date, String url) throws IOException {
-        String firstReadingText = extractHtmlContentByHeading(html, "Lectura del Día");
-        String gospelText = extractHtmlContentByHeading(html, "Evangelio del Día");
-        String papalText = extractHtmlContentByHeading(html, "Las palabras de los Papas");
+        String firstReadingHeading = isEnglish ? "Reading of the Day" : "Lectura del Día";
+        String gospelHeading = isEnglish ? "Gospel of the Day" : "Evangelio del Día";
+        String papalHeading = isEnglish ? "The Pope's words" : "Las palabras de los Papas";
+
+        String firstReadingText = extractHtmlContentByHeading(html, firstReadingHeading);
+        String gospelText = extractHtmlContentByHeading(html, gospelHeading);
+        String papalText = extractHtmlContentByHeading(html, papalHeading);
         String plainText = htmlToPlainText(html);
 
         if (firstReadingText.isEmpty()) {
-            firstReadingText = extractSection(plainText, "Lectura del Día", "Evangelio del Día");
+            firstReadingText = extractSection(plainText, firstReadingHeading, gospelHeading);
         }
         if (gospelText.isEmpty()) {
-            gospelText = extractSection(plainText, "Evangelio del Día", "Las palabras de los Papas");
+            gospelText = extractSection(plainText, gospelHeading, papalHeading);
         }
         if (papalText.isEmpty()) {
-            papalText = extractSection(
-                    plainText,
-                    "Las palabras de los Papas",
-                    "Su contribución",
-                    "Los textos de la Sagrada Escritura",
-                    "Enviar",
-                    "Otros eventos programados"
-            );
+            if (isEnglish) {
+                papalText = extractSection(
+                        plainText,
+                        papalHeading,
+                        "His contribution",
+                        "The texts of the Holy Scripture",
+                        "Send",
+                        "Other scheduled events"
+                );
+            } else {
+                papalText = extractSection(
+                        plainText,
+                        papalHeading,
+                        "Su contribución",
+                        "Los textos de la Sagrada Escritura",
+                        "Enviar",
+                        "Otros eventos programados"
+                );
+            }
         }
 
         DailySection firstReading = DailySection.fromScripture(firstReadingText);
@@ -1030,21 +1052,22 @@ public class MainActivity extends Activity {
             return htmlTitle;
         }
 
-        String dateToken = new SimpleDateFormat("dd/MM/yyyy", spanishLocale).format(date);
-        int start = text.indexOf("Fecha" + dateToken);
+        String dateToken = new SimpleDateFormat("dd/MM/yyyy", isEnglish ? Locale.US : spanishLocale).format(date);
+        String dateLabel = isEnglish ? "Date" : "Fecha";
+        int start = text.indexOf(dateLabel + dateToken);
         if (start >= 0) {
-            start += ("Fecha" + dateToken).length();
+            start += (dateLabel + dateToken).length();
         } else {
-            start = text.indexOf("Fecha");
+            start = text.indexOf(dateLabel);
             if (start < 0) {
                 return "";
             }
-            start += "Fecha".length();
+            start += dateLabel.length();
         }
 
-        int end = text.indexOf("La Palabra del día es", start);
+        int end = text.indexOf(isEnglish ? "Today's Word is" : "La Palabra del día es", start);
         if (end < 0) {
-            end = text.indexOf("Lectura del Día", start);
+            end = text.indexOf(isEnglish ? "Reading of the Day" : "Lectura del Día", start);
         }
         if (end < 0 || end <= start) {
             return "";
@@ -1111,15 +1134,20 @@ public class MainActivity extends Activity {
 
     private String buildVaticanUrl(Date date) {
         String pathDate = new SimpleDateFormat("yyyy/MM/dd", Locale.US).format(date);
-        return "https://www.vaticannews.va/es/evangelio-de-hoy/" + pathDate + ".html";
+        String langPath = isEnglish ? "en" : "es";
+        String pageName = isEnglish ? "word-of-the-day" : "evangelio-de-hoy";
+        return "https://www.vaticannews.va/" + langPath + "/" + pageName + "/" + pathDate + ".html";
     }
 
     private String formatDisplayDate(Date date) {
+        if (isEnglish) {
+            return new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US).format(date);
+        }
         return new SimpleDateFormat("EEEE, d 'de' MMMM 'de' yyyy", spanishLocale).format(date);
     }
 
     private String formatMonthTitle(Date date) {
-        return new SimpleDateFormat("MMMM yyyy", spanishLocale).format(date);
+        return new SimpleDateFormat("MMMM yyyy", isEnglish ? Locale.US : spanishLocale).format(date);
     }
 
     private void updateDateChip() {
@@ -1128,8 +1156,9 @@ public class MainActivity extends Activity {
         }
 
         Date selectedDate = selectedDateCalendar.getTime();
-        dateChipPrimary.setText(new SimpleDateFormat("EEE d", spanishLocale).format(selectedDate));
-        dateChipSecondary.setText(new SimpleDateFormat("MMM yyyy", spanishLocale).format(selectedDate));
+        Locale locale = isEnglish ? Locale.US : spanishLocale;
+        dateChipPrimary.setText(new SimpleDateFormat("EEE d", locale).format(selectedDate));
+        dateChipSecondary.setText(new SimpleDateFormat("MMM yyyy", locale).format(selectedDate));
     }
 
     private Calendar startOfDay(Calendar calendar) {

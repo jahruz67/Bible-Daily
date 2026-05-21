@@ -82,7 +82,7 @@ public class SettingsActivity extends Activity {
         titleParams.setMargins(0, dp(18), 0, dp(18));
         content.addView(title, titleParams);
 
-        content.addView(createAutoUpdatesCard());
+        content.addView(createLanguageCard());
         content.addView(createVersionCard());
 
         checkButton = actionButton("Check now", COLOR_ACCENT, Color.WHITE);
@@ -151,7 +151,7 @@ public class SettingsActivity extends Activity {
         return topBar;
     }
 
-    private View createAutoUpdatesCard() {
+    private View createLanguageCard() {
         LinearLayout card = createCard();
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
@@ -159,11 +159,11 @@ public class SettingsActivity extends Activity {
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Auto updates", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Language", 20, COLOR_INK, Typeface.BOLD);
         title.setIncludeFontPadding(false);
         copy.addView(title);
 
-        TextView subtitle = textView("Check for new builds on startup", 14, COLOR_MUTED, Typeface.NORMAL);
+        TextView subtitle = textView("Select the language for daily readings", 14, COLOR_MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -177,14 +177,13 @@ public class SettingsActivity extends Activity {
                 1f
         ));
 
-        Switch autoSwitch = new Switch(this);
-        autoSwitch.setChecked(UpdateManager.isAutoUpdatesEnabled(this));
-        autoSwitch.setContentDescription("Auto updates");
-        autoSwitch.setOnCheckedChangeListener((button, checked) -> {
-            UpdateManager.setAutoUpdatesEnabled(this, checked);
-            statusText.setText(checked ? "Startup checks are on." : "Startup checks are off.");
+        TextView langToggle = actionButton(UpdateManager.isEnglish(this) ? "English" : "Spanish", COLOR_ACCENT, Color.WHITE);
+        langToggle.setOnClickListener(view -> {
+            boolean current = UpdateManager.isEnglish(this);
+            UpdateManager.setEnglish(this, !current);
+            langToggle.setText(!current ? "English" : "Spanish");
         });
-        card.addView(autoSwitch);
+        card.addView(langToggle, new LinearLayout.LayoutParams(dp(100), dp(40)));
 
         return card;
     }
