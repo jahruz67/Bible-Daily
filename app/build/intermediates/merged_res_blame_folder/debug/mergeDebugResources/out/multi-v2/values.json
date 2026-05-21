@@ -1,0 +1,38 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.bibliadiaria.app-mergeDebugResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\360he\\Documents\\Bible app\\app\\src\\main\\res\\values\\styles.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "9",
+                        "endColumns": "12",
+                        "endOffsets": "500"
+                    },
+                    "to": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "106",
+                        "endLines": "10",
+                        "endColumns": "12",
+                        "endOffsets": "551"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\360he\\Documents\\Bible app\\app\\src\\main\\res\\values\\strings.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "50",
+                        "endOffsets": "101"
+                    }
+                }
+            ]
+        }
+    ]
+}

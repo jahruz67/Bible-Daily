@@ -1,0 +1,7 @@
+com.bibliadiaria.app-pngs-0 C:\Users\360he\Documents\Bible app\app\build\generated\res\pngs\debug
+com.bibliadiaria.app-resValues-1 C:\Users\360he\Documents\Bible app\app\build\generated\res\resValues\debug
+com.bibliadiaria.app-packageDebugResources-2 C:\Users\360he\Documents\Bible app\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.bibliadiaria.app-packageDebugResources-3 C:\Users\360he\Documents\Bible app\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.bibliadiaria.app-debug-4 C:\Users\360he\Documents\Bible app\app\build\intermediates\merged_res\debug\mergeDebugResources
+com.bibliadiaria.app-debug-5 C:\Users\360he\Documents\Bible app\app\src\debug\res
+com.bibliadiaria.app-main-6 C:\Users\360he\Documents\Bible app\app\src\main\res
