@@ -2,6 +2,9 @@ plugins {
     id "com.android.application"
 }
 
+def ciVersionCode = providers.gradleProperty("ciVersionCode").getOrNull()
+def ciVersionName = providers.gradleProperty("ciVersionName").getOrNull()
+
 android {
     namespace "com.bibliadiaria.app"
     compileSdk 35
@@ -10,8 +13,8 @@ android {
         applicationId "com.bibliadiaria.app"
         minSdk 23
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode ciVersionCode != null ? ciVersionCode.toInteger() : 1
+        versionName ciVersionName != null ? ciVersionName : "1.0"
     }
 
     compileOptions {

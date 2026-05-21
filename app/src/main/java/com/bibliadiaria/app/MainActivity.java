@@ -91,6 +91,7 @@ public class MainActivity extends Activity {
 
         setContentView(createScreen());
         loadToday();
+        checkForUpdateOnStartup();
     }
 
     @Override
@@ -598,6 +599,23 @@ public class MainActivity extends Activity {
         updateDateChip();
         renderCalendar();
         loadSelectedDate();
+    }
+
+    private void checkForUpdateOnStartup() {
+        if (!UpdateManager.isAutoUpdatesEnabled(this) || executor == null || executor.isShutdown()) {
+            return;
+        }
+
+        executor.submit(() -> {
+            try {
+                UpdateManager.UpdateInfo info = UpdateManager.fetchLatestUpdate(this);
+                if (info.updateAvailable) {
+                    runOnUiThread(() -> UpdateManager.showUpdateDialog(this, info));
+                }
+            } catch (Exception ignored) {
+                // Startup update checks stay quiet so daily readings remain the main experience.
+            }
+        });
     }
 
     private void loadSelectedDate() {

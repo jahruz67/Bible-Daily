@@ -1,6 +1,7 @@
 package com.bibliadiaria.app;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -152,6 +153,18 @@ public class ExtrasActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 1f
         ));
+
+        TextView settings = textView("Ajustes", 15, COLOR_ACCENT, Typeface.BOLD);
+        settings.setGravity(Gravity.CENTER);
+        settings.setPadding(dp(14), 0, dp(14), 0);
+        settings.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
+        settings.setOnClickListener(view -> startActivity(new Intent(this, SettingsActivity.class)));
+        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(40)
+        );
+        settingsParams.setMargins(0, 0, dp(8), 0);
+        topBar.addView(settings, settingsParams);
 
         TextView home = textView("Inicio", 15, COLOR_ACCENT, Typeface.BOLD);
         home.setGravity(Gravity.CENTER);
