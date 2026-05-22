@@ -46,8 +46,16 @@ public class MainActivity extends Activity {
     private static final int COLOR_MUTED = Color.rgb(91, 99, 98);
     private static final int COLOR_ACCENT = Color.rgb(0, 107, 90);
     private static final int COLOR_WARM = Color.rgb(217, 75, 61);
+    private static final int COLOR_HOLIDAY_BG = Color.rgb(255, 246, 229);
+    private static final int COLOR_HOLIDAY_BORDER = Color.rgb(229, 166, 72);
+    private static final int COLOR_HOLIDAY_TEXT = Color.rgb(143, 76, 22);
     private static final int MIN_FONT_SP = 16;
     private static final int MAX_FONT_SP = 30;
+
+    private static final int RANK_HOLY_DAY = 0;
+    private static final int RANK_MEMORIAL = 1;
+    private static final int RANK_FEAST = 2;
+    private static final int RANK_SOLEMNITY = 3;
 
     private final Locale spanishLocale = new Locale("es", "ES");
     private final List<TextView> resizableTextViews = new ArrayList<>();
@@ -59,6 +67,7 @@ public class MainActivity extends Activity {
     private TextView dateChipPrimary;
     private TextView dateChipSecondary;
     private TextView liturgyText;
+    private LinearLayout holidayTagsRow;
     private TextView statusText;
     private TextView sourceText;
     private LinearLayout statusBlock;
@@ -239,6 +248,17 @@ public class MainActivity extends Activity {
 
         dateText = textView("", 16, COLOR_MUTED, Typeface.BOLD);
         header.addView(dateText);
+
+        holidayTagsRow = new LinearLayout(this);
+        holidayTagsRow.setOrientation(LinearLayout.HORIZONTAL);
+        holidayTagsRow.setGravity(Gravity.CENTER_VERTICAL);
+        holidayTagsRow.setVisibility(View.GONE);
+        LinearLayout.LayoutParams tagsParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        tagsParams.setMargins(0, dp(8), 0, 0);
+        header.addView(holidayTagsRow, tagsParams);
 
         liturgyText = textView("", 16, COLOR_INK, Typeface.NORMAL);
         liturgyText.setLineSpacing(0, 1.12f);
@@ -463,16 +483,23 @@ public class MainActivity extends Activity {
             if (dayNumber >= 1 && dayNumber <= daysInMonth) {
                 Calendar cellDate = startOfMonth(visibleMonthCalendar);
                 cellDate.set(Calendar.DAY_OF_MONTH, dayNumber);
+                LiturgicalDay holiday = knownCatholicHoliday(cellDate);
 
                 dayCell.setText(String.valueOf(dayNumber));
                 if (isSameDay(cellDate, selectedDateCalendar)) {
                     dayCell.setTextColor(Color.WHITE);
-                    dayCell.setBackground(oval(COLOR_ACCENT));
+                    dayCell.setBackground(oval(holiday == null ? COLOR_ACCENT : COLOR_WARM));
+                } else if (holiday != null) {
+                    dayCell.setTextColor(COLOR_HOLIDAY_TEXT);
+                    dayCell.setBackground(roundedRect(COLOR_HOLIDAY_BG, dp(8), COLOR_HOLIDAY_BORDER, dp(1)));
                 } else if (isSameDay(cellDate, today)) {
                     dayCell.setTextColor(COLOR_WARM);
                     dayCell.setBackground(roundedRect(Color.rgb(255, 239, 236), dp(8), Color.TRANSPARENT, 0));
                 } else {
                     dayCell.setBackground(roundedRect(Color.TRANSPARENT, dp(8), Color.TRANSPARENT, 0));
+                }
+                if (holiday != null) {
+                    dayCell.setContentDescription(dayNumber + ", " + holiday.displayName(isEnglish));
                 }
 
                 Calendar dateForClick = (Calendar) cellDate.clone();
@@ -484,6 +511,426 @@ public class MainActivity extends Activity {
 
             calendarGrid.addView(dayCell);
         }
+    }
+
+    private void updateHolidayTags(LiturgicalDay holiday) {
+        if (holidayTagsRow == null) {
+            return;
+        }
+
+        holidayTagsRow.removeAllViews();
+        if (holiday == null) {
+            holidayTagsRow.setVisibility(View.GONE);
+            return;
+        }
+
+        holidayTagsRow.setVisibility(View.VISIBLE);
+        holidayTagsRow.addView(createHolidayTag(holiday.rankLabel(isEnglish)));
+        holidayTagsRow.addView(createHolidayTag(isEnglish ? "Catholic holiday" : "Fiesta cat\u00f3lica"));
+    }
+
+    private TextView createHolidayTag(String text) {
+        Locale locale = isEnglish ? Locale.US : spanishLocale;
+        TextView tag = textView(text.toUpperCase(locale), 11, COLOR_HOLIDAY_TEXT, Typeface.BOLD);
+        tag.setGravity(Gravity.CENTER);
+        tag.setIncludeFontPadding(false);
+        tag.setPadding(dp(10), dp(6), dp(10), dp(6));
+        tag.setBackground(roundedRect(COLOR_HOLIDAY_BG, dp(8), COLOR_HOLIDAY_BORDER, dp(1)));
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, 0, dp(6), 0);
+        tag.setLayoutParams(params);
+        return tag;
+    }
+
+    private LiturgicalDay holidayFromLiturgicalTitle(String title) {
+        if (title == null || title.trim().isEmpty()) {
+            return null;
+        }
+
+        String key = headingKey(title);
+        int rank = classifyLiturgicalTitle(key);
+        if (rank < 0) {
+            return null;
+        }
+        return new LiturgicalDay(title, title, rank);
+    }
+
+    private int classifyLiturgicalTitle(String key) {
+        if (key.contains("solemnity") || key.contains("solemnidad")) {
+            return RANK_SOLEMNITY;
+        }
+        if (key.contains("feast") || key.contains("fiesta")) {
+            return RANK_FEAST;
+        }
+        if (key.contains("memorial") || key.contains("memoria")) {
+            return RANK_MEMORIAL;
+        }
+        if (key.contains("ash wednesday")
+                || key.contains("miercoles de ceniza")
+                || key.contains("palm sunday")
+                || key.contains("domingo de ramos")
+                || key.contains("holy thursday")
+                || key.contains("jueves santo")
+                || key.contains("good friday")
+                || key.contains("viernes santo")
+                || key.contains("holy saturday")
+                || key.contains("sabado santo")
+                || key.contains("easter sunday")
+                || key.contains("domingo de pascua")
+                || key.contains("octave of easter")
+                || key.contains("octava de pascua")
+                || key.contains("pentecost")
+                || key.contains("pentecostes")
+                || key.contains("first sunday of advent")
+                || key.contains("i domingo de adviento")) {
+            return RANK_HOLY_DAY;
+        }
+        return -1;
+    }
+
+    private LiturgicalDay knownCatholicHoliday(Calendar date) {
+        if (date == null) {
+            return null;
+        }
+
+        int year = date.get(Calendar.YEAR);
+        Calendar easter = easterSunday(year);
+
+        LiturgicalDay movable = holidayOnOffset(date, easter, -46,
+                "Ash Wednesday",
+                "Mi\u00e9rcoles de Ceniza",
+                RANK_HOLY_DAY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, -7,
+                "Palm Sunday of the Passion of the Lord",
+                "Domingo de Ramos de la Pasi\u00f3n del Se\u00f1or",
+                RANK_HOLY_DAY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, -3,
+                "Holy Thursday",
+                "Jueves Santo",
+                RANK_HOLY_DAY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, -2,
+                "Good Friday",
+                "Viernes Santo",
+                RANK_HOLY_DAY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, -1,
+                "Holy Saturday",
+                "S\u00e1bado Santo",
+                RANK_HOLY_DAY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 0,
+                "Easter Sunday of the Resurrection of the Lord",
+                "Domingo de Pascua de la Resurrecci\u00f3n del Se\u00f1or",
+                RANK_SOLEMNITY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 7,
+                "Second Sunday of Easter",
+                "II Domingo de Pascua",
+                RANK_HOLY_DAY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 39,
+                "Solemnity of the Ascension of the Lord",
+                "Solemnidad de la Ascensi\u00f3n del Se\u00f1or",
+                RANK_SOLEMNITY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 49,
+                "Pentecost",
+                "Pentecost\u00e9s",
+                RANK_SOLEMNITY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 50,
+                "Memorial of the Blessed Virgin Mary, Mother of the Church",
+                "Memoria de la Bienaventurada Virgen Mar\u00eda, Madre de la Iglesia",
+                RANK_MEMORIAL);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 56,
+                "Solemnity of the Most Holy Trinity",
+                "Solemnidad de la Sant\u00edsima Trinidad",
+                RANK_SOLEMNITY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 60,
+                "Solemnity of the Most Holy Body and Blood of Christ",
+                "Solemnidad del Sant\u00edsimo Cuerpo y Sangre de Cristo",
+                RANK_SOLEMNITY);
+        if (movable != null) {
+            return movable;
+        }
+        movable = holidayOnOffset(date, easter, 68,
+                "Solemnity of the Most Sacred Heart of Jesus",
+                "Solemnidad del Sagrado Coraz\u00f3n de Jes\u00fas",
+                RANK_SOLEMNITY);
+        if (movable != null) {
+            return movable;
+        }
+
+        Calendar advent = firstSundayOfAdvent(year);
+        if (isSameDay(date, shiftedDate(advent, -7))) {
+            return new LiturgicalDay(
+                    "Solemnity of Our Lord Jesus Christ, King of the Universe",
+                    "Solemnidad de Nuestro Se\u00f1or Jesucristo, Rey del Universo",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (isSameDay(date, advent)) {
+            return new LiturgicalDay(
+                    "First Sunday of Advent",
+                    "I Domingo de Adviento",
+                    RANK_HOLY_DAY
+            );
+        }
+
+        Calendar baptism = sundayOnOrAfter(year, Calendar.JANUARY, 7);
+        if (isSameDay(date, baptism)) {
+            return new LiturgicalDay(
+                    "Feast of the Baptism of the Lord",
+                    "Fiesta del Bautismo del Se\u00f1or",
+                    RANK_FEAST
+            );
+        }
+
+        Calendar holyFamily = holyFamilySunday(year);
+        if (isSameDay(date, holyFamily)) {
+            return new LiturgicalDay(
+                    "Feast of the Holy Family",
+                    "Fiesta de la Sagrada Familia",
+                    RANK_FEAST
+            );
+        }
+
+        int month = date.get(Calendar.MONTH);
+        int day = date.get(Calendar.DAY_OF_MONTH);
+
+        if (month == Calendar.JANUARY && day == 1) {
+            return new LiturgicalDay(
+                    "Solemnity of Mary, the Holy Mother of God",
+                    "Solemnidad de Santa Mar\u00eda, Madre de Dios",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.JANUARY && day == 6) {
+            return new LiturgicalDay(
+                    "Solemnity of the Epiphany of the Lord",
+                    "Solemnidad de la Epifan\u00eda del Se\u00f1or",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.FEBRUARY && day == 2) {
+            return new LiturgicalDay(
+                    "Feast of the Presentation of the Lord",
+                    "Fiesta de la Presentaci\u00f3n del Se\u00f1or",
+                    RANK_FEAST
+            );
+        }
+        if (month == Calendar.MARCH && day == 19) {
+            return new LiturgicalDay(
+                    "Solemnity of Saint Joseph",
+                    "Solemnidad de San Jos\u00e9",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.MARCH && day == 25) {
+            return new LiturgicalDay(
+                    "Solemnity of the Annunciation of the Lord",
+                    "Solemnidad de la Anunciaci\u00f3n del Se\u00f1or",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.MAY && day == 31) {
+            return new LiturgicalDay(
+                    "Feast of the Visitation of the Blessed Virgin Mary",
+                    "Fiesta de la Visitaci\u00f3n de la Bienaventurada Virgen Mar\u00eda",
+                    RANK_FEAST
+            );
+        }
+        if (month == Calendar.JUNE && day == 24) {
+            return new LiturgicalDay(
+                    "Solemnity of the Nativity of Saint John the Baptist",
+                    "Solemnidad de la Natividad de San Juan Bautista",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.JUNE && day == 29) {
+            return new LiturgicalDay(
+                    "Solemnity of Saints Peter and Paul",
+                    "Solemnidad de San Pedro y San Pablo",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.AUGUST && day == 6) {
+            return new LiturgicalDay(
+                    "Feast of the Transfiguration of the Lord",
+                    "Fiesta de la Transfiguraci\u00f3n del Se\u00f1or",
+                    RANK_FEAST
+            );
+        }
+        if (month == Calendar.AUGUST && day == 15) {
+            return new LiturgicalDay(
+                    "Solemnity of the Assumption of the Blessed Virgin Mary",
+                    "Solemnidad de la Asunci\u00f3n de la Bienaventurada Virgen Mar\u00eda",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.SEPTEMBER && day == 14) {
+            return new LiturgicalDay(
+                    "Feast of the Exaltation of the Holy Cross",
+                    "Fiesta de la Exaltaci\u00f3n de la Santa Cruz",
+                    RANK_FEAST
+            );
+        }
+        if (month == Calendar.NOVEMBER && day == 1) {
+            return new LiturgicalDay(
+                    "Solemnity of All Saints",
+                    "Solemnidad de Todos los Santos",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.NOVEMBER && day == 2) {
+            return new LiturgicalDay(
+                    "Commemoration of All the Faithful Departed",
+                    "Conmemoraci\u00f3n de Todos los Fieles Difuntos",
+                    RANK_HOLY_DAY
+            );
+        }
+        if (month == Calendar.NOVEMBER && day == 9) {
+            return new LiturgicalDay(
+                    "Feast of the Dedication of the Lateran Basilica",
+                    "Fiesta de la Dedicaci\u00f3n de la Bas\u00edlica de Letr\u00e1n",
+                    RANK_FEAST
+            );
+        }
+        if (month == Calendar.DECEMBER && day == 8) {
+            return new LiturgicalDay(
+                    "Solemnity of the Immaculate Conception",
+                    "Solemnidad de la Inmaculada Concepci\u00f3n",
+                    RANK_SOLEMNITY
+            );
+        }
+        if (month == Calendar.DECEMBER && day == 12) {
+            return new LiturgicalDay(
+                    "Feast of Our Lady of Guadalupe",
+                    "Fiesta de Nuestra Se\u00f1ora de Guadalupe",
+                    RANK_FEAST
+            );
+        }
+        if (month == Calendar.DECEMBER && day == 25) {
+            return new LiturgicalDay(
+                    "Solemnity of the Nativity of the Lord",
+                    "Solemnidad de la Natividad del Se\u00f1or",
+                    RANK_SOLEMNITY
+            );
+        }
+
+        return null;
+    }
+
+    private LiturgicalDay holidayOnOffset(
+            Calendar date,
+            Calendar baseDate,
+            int dayOffset,
+            String englishName,
+            String spanishName,
+            int rank
+    ) {
+        if (isSameDay(date, shiftedDate(baseDate, dayOffset))) {
+            return new LiturgicalDay(englishName, spanishName, rank);
+        }
+        return null;
+    }
+
+    private Calendar calendarFromDate(Date date) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(date);
+        return startOfDay(calendar);
+    }
+
+    private Calendar shiftedDate(Calendar date, int dayOffset) {
+        Calendar shifted = startOfDay(date);
+        shifted.add(Calendar.DAY_OF_YEAR, dayOffset);
+        return shifted;
+    }
+
+    private Calendar easterSunday(int year) {
+        int a = year % 19;
+        int b = year / 100;
+        int c = year % 100;
+        int d = b / 4;
+        int e = b % 4;
+        int f = (b + 8) / 25;
+        int g = (b - f + 1) / 3;
+        int h = (19 * a + b - d - g + 15) % 30;
+        int i = c / 4;
+        int k = c % 4;
+        int l = (32 + 2 * e + 2 * i - h - k) % 7;
+        int m = (a + 11 * h + 22 * l) / 451;
+        int month = (h + l - 7 * m + 114) / 31;
+        int day = ((h + l - 7 * m + 114) % 31) + 1;
+
+        Calendar easter = Calendar.getInstance();
+        easter.clear();
+        easter.set(year, month - 1, day);
+        return startOfDay(easter);
+    }
+
+    private Calendar firstSundayOfAdvent(int year) {
+        return sundayOnOrAfter(year, Calendar.NOVEMBER, 27);
+    }
+
+    private Calendar sundayOnOrAfter(int year, int month, int day) {
+        Calendar date = Calendar.getInstance();
+        date.clear();
+        date.set(year, month, day);
+        date = startOfDay(date);
+        while (date.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+            date.add(Calendar.DAY_OF_YEAR, 1);
+        }
+        return date;
+    }
+
+    private Calendar holyFamilySunday(int year) {
+        Calendar date = calendarDate(year, Calendar.DECEMBER, 26);
+        while (date.get(Calendar.DAY_OF_MONTH) <= 31) {
+            if (date.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY) {
+                return date;
+            }
+            date.add(Calendar.DAY_OF_YEAR, 1);
+        }
+        return calendarDate(year, Calendar.DECEMBER, 30);
+    }
+
+    private Calendar calendarDate(int year, int month, int day) {
+        Calendar date = Calendar.getInstance();
+        date.clear();
+        date.set(year, month, day);
+        return startOfDay(date);
     }
 
     private View createStatusBlock() {
@@ -652,7 +1099,13 @@ public class MainActivity extends Activity {
         sectionsLayout.removeAllViews();
         statusBlock.setVisibility(View.VISIBLE);
         dateText.setText(formatDisplayDate(date));
-        liturgyText.setText(isEnglish ? "Readings according to device date." : "Lecturas según la fecha del dispositivo.");
+        LiturgicalDay localHoliday = knownCatholicHoliday(calendarFromDate(date));
+        updateHolidayTags(localHoliday);
+        if (localHoliday == null) {
+            liturgyText.setText(isEnglish ? "Readings according to device date." : "Lecturas según la fecha del dispositivo.");
+        } else {
+            liturgyText.setText(localHoliday.displayName(isEnglish));
+        }
         statusText.setText(isEnglish ? "Loading today's Word..." : "Cargando la Palabra de hoy...");
         progressBar.setVisibility(View.VISIBLE);
         retryButton.setVisibility(View.GONE);
@@ -674,6 +1127,8 @@ public class MainActivity extends Activity {
         } else {
             liturgyText.setText(reading.liturgicalTitle);
         }
+        LiturgicalDay websiteHoliday = holidayFromLiturgicalTitle(reading.liturgicalTitle);
+        updateHolidayTags(websiteHoliday == null ? knownCatholicHoliday(selectedDateCalendar) : websiteHoliday);
 
         if (isEnglish) {
             addScriptureCard("Word of God", "Gospel of the Day", reading.gospel, true);
@@ -1213,6 +1668,35 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private static class LiturgicalDay {
+        final String englishName;
+        final String spanishName;
+        final int rank;
+
+        LiturgicalDay(String englishName, String spanishName, int rank) {
+            this.englishName = englishName;
+            this.spanishName = spanishName;
+            this.rank = rank;
+        }
+
+        String displayName(boolean isEnglish) {
+            return isEnglish ? englishName : spanishName;
+        }
+
+        String rankLabel(boolean isEnglish) {
+            switch (rank) {
+                case RANK_SOLEMNITY:
+                    return isEnglish ? "Solemnity" : "Solemnidad";
+                case RANK_FEAST:
+                    return isEnglish ? "Feast" : "Fiesta";
+                case RANK_MEMORIAL:
+                    return isEnglish ? "Memorial" : "Memoria";
+                default:
+                    return isEnglish ? "Holy day" : "D\u00eda santo";
+            }
+        }
     }
 
     private static class DailyReading {
