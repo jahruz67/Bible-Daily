@@ -26,16 +26,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Android debug keystore
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: android-debug-keystore-${{ runner.os }}
-
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      - name: Build update-compatible APK
         run: ./gradlew assembleDebug -PciVersionCode=${{ github.run_number }} -PciVersionName=1.0.${{ github.run_number }}
 
       - name: Prepare release assets
