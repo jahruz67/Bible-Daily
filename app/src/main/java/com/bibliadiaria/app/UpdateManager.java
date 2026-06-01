@@ -24,10 +24,51 @@ final class UpdateManager {
     static final String PREFS_NAME = "preferencias_lectura";
     static final String KEY_AUTO_UPDATES = "auto_updates_enabled";
     static final String KEY_IS_ENGLISH = "is_english";
+    static final String KEY_TTS_VOICE_ENGLISH = "tts_voice_english";
+    static final String KEY_TTS_VOICE_SPANISH = "tts_voice_spanish";
+    static final String DEFAULT_TTS_VOICE_ENGLISH = "af_heart";
+    static final String DEFAULT_TTS_VOICE_SPANISH = "ef_dora";
     static final String LATEST_JSON_URL =
             "https://github.com/jahruz67/Bible-Daily/releases/download/latest/latest.json";
     static final String APK_URL =
             "https://github.com/jahruz67/Bible-Daily/releases/download/latest/app-debug.apk";
+
+    private static final VoiceOption[] ENGLISH_VOICES = {
+            new VoiceOption("af_heart", "Heart (US female)"),
+            new VoiceOption("af_alloy", "Alloy (US female)"),
+            new VoiceOption("af_aoede", "Aoede (US female)"),
+            new VoiceOption("af_bella", "Bella (US female)"),
+            new VoiceOption("af_jadzia", "Jadzia (US female)"),
+            new VoiceOption("af_jessica", "Jessica (US female)"),
+            new VoiceOption("af_kore", "Kore (US female)"),
+            new VoiceOption("af_nicole", "Nicole (US female)"),
+            new VoiceOption("af_nova", "Nova (US female)"),
+            new VoiceOption("af_river", "River (US female)"),
+            new VoiceOption("af_sarah", "Sarah (US female)"),
+            new VoiceOption("af_sky", "Sky (US female)"),
+            new VoiceOption("am_adam", "Adam (US male)"),
+            new VoiceOption("am_echo", "Echo (US male)"),
+            new VoiceOption("am_eric", "Eric (US male)"),
+            new VoiceOption("am_fenrir", "Fenrir (US male)"),
+            new VoiceOption("am_liam", "Liam (US male)"),
+            new VoiceOption("am_michael", "Michael (US male)"),
+            new VoiceOption("am_onyx", "Onyx (US male)"),
+            new VoiceOption("am_puck", "Puck (US male)"),
+            new VoiceOption("am_santa", "Santa (US male)"),
+            new VoiceOption("bf_alice", "Alice (UK female)"),
+            new VoiceOption("bf_emma", "Emma (UK female)"),
+            new VoiceOption("bf_lily", "Lily (UK female)"),
+            new VoiceOption("bm_daniel", "Daniel (UK male)"),
+            new VoiceOption("bm_fable", "Fable (UK male)"),
+            new VoiceOption("bm_george", "George (UK male)"),
+            new VoiceOption("bm_lewis", "Lewis (UK male)")
+    };
+
+    private static final VoiceOption[] SPANISH_VOICES = {
+            new VoiceOption("ef_dora", "Dora (Spanish female)"),
+            new VoiceOption("em_alex", "Alex (Spanish male)"),
+            new VoiceOption("em_santa", "Santa (Spanish male)")
+    };
 
     private UpdateManager() {
     }
@@ -46,6 +87,63 @@ final class UpdateManager {
 
     static void setEnglish(Context context, boolean enabled) {
         preferences(context).edit().putBoolean(KEY_IS_ENGLISH, enabled).apply();
+    }
+
+    static VoiceOption[] getTtsVoiceOptions(boolean isEnglish) {
+        return isEnglish ? ENGLISH_VOICES : SPANISH_VOICES;
+    }
+
+    static String getTtsVoice(Context context, boolean isEnglish) {
+        String defaultVoice = getDefaultTtsVoice(isEnglish);
+        String voice = preferences(context).getString(getTtsVoiceKey(isEnglish), defaultVoice);
+        if (isValidTtsVoice(isEnglish, voice)) {
+            return voice;
+        }
+        return defaultVoice;
+    }
+
+    static void setTtsVoice(Context context, boolean isEnglish, String voiceId) {
+        String voice = isValidTtsVoice(isEnglish, voiceId) ? voiceId : getDefaultTtsVoice(isEnglish);
+        preferences(context).edit().putString(getTtsVoiceKey(isEnglish), voice).apply();
+    }
+
+    static String getTtsVoiceLabel(boolean isEnglish, String voiceId) {
+        for (VoiceOption option : getTtsVoiceOptions(isEnglish)) {
+            if (option.id.equals(voiceId)) {
+                return option.label;
+            }
+        }
+        return getTtsVoiceLabel(isEnglish, getDefaultTtsVoice(isEnglish));
+    }
+
+    static int getTtsVoiceIndex(boolean isEnglish, String voiceId) {
+        VoiceOption[] options = getTtsVoiceOptions(isEnglish);
+        for (int index = 0; index < options.length; index++) {
+            if (options[index].id.equals(voiceId)) {
+                return index;
+            }
+        }
+        return 0;
+    }
+
+    private static String getDefaultTtsVoice(boolean isEnglish) {
+        return isEnglish ? DEFAULT_TTS_VOICE_ENGLISH : DEFAULT_TTS_VOICE_SPANISH;
+    }
+
+    private static String getTtsVoiceKey(boolean isEnglish) {
+        return isEnglish ? KEY_TTS_VOICE_ENGLISH : KEY_TTS_VOICE_SPANISH;
+    }
+
+    private static boolean isValidTtsVoice(boolean isEnglish, String voiceId) {
+        if (voiceId == null) {
+            return false;
+        }
+        for (VoiceOption option : getTtsVoiceOptions(isEnglish)) {
+            if (option.id.equals(voiceId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static UpdateInfo fetchLatestUpdate(Context context) throws Exception {
@@ -185,6 +283,16 @@ final class UpdateManager {
             this.builtAt = builtAt;
             this.commit = commit;
             this.updateAvailable = updateAvailable;
+        }
+    }
+
+    static final class VoiceOption {
+        final String id;
+        final String label;
+
+        VoiceOption(String id, String label) {
+            this.id = id;
+            this.label = label;
         }
     }
 }

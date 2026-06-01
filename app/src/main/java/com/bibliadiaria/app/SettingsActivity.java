@@ -1,6 +1,7 @@
 package com.bibliadiaria.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -31,6 +32,8 @@ public class SettingsActivity extends Activity {
     private TextView installedVersionText;
     private TextView checkButton;
     private TextView downloadButton;
+    private TextView voiceSubtitleText;
+    private TextView voiceButton;
     private UpdateManager.UpdateInfo latestInfo;
 
     @Override
@@ -83,6 +86,7 @@ public class SettingsActivity extends Activity {
         content.addView(title, titleParams);
 
         content.addView(createLanguageCard());
+        content.addView(createVoiceCard());
         content.addView(createVersionCard());
 
         checkButton = actionButton("Check now", COLOR_ACCENT, Color.WHITE);
@@ -182,9 +186,47 @@ public class SettingsActivity extends Activity {
             boolean current = UpdateManager.isEnglish(this);
             UpdateManager.setEnglish(this, !current);
             langToggle.setText(!current ? "English" : "Spanish");
+            updateVoiceCard();
         });
         card.addView(langToggle, new LinearLayout.LayoutParams(dp(100), dp(40)));
 
+        return card;
+    }
+
+    private View createVoiceCard() {
+        LinearLayout card = createCard();
+        card.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+
+        TextView title = textView("Voice", 20, COLOR_INK, Typeface.BOLD);
+        title.setIncludeFontPadding(false);
+        copy.addView(title);
+
+        voiceSubtitleText = textView("", 14, COLOR_MUTED, Typeface.NORMAL);
+        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        subtitleParams.setMargins(0, dp(6), 0, 0);
+        copy.addView(voiceSubtitleText, subtitleParams);
+
+        card.addView(copy, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        voiceButton = actionButton("", COLOR_ACCENT, Color.WHITE);
+        voiceButton.setOnClickListener(view -> showVoicePicker());
+        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(42)
+        );
+        buttonParams.setMargins(0, dp(12), 0, 0);
+        card.addView(voiceButton, buttonParams);
+
+        updateVoiceCard();
         return card;
     }
 
@@ -259,6 +301,43 @@ public class SettingsActivity extends Activity {
         checkButton.setEnabled(true);
         checkButton.setAlpha(1f);
         statusText.setText("Could not check for updates. " + cleanMessage(error));
+    }
+
+    private void showVoicePicker() {
+        boolean english = UpdateManager.isEnglish(this);
+        UpdateManager.VoiceOption[] options = UpdateManager.getTtsVoiceOptions(english);
+        String[] labels = new String[options.length];
+        for (int index = 0; index < options.length; index++) {
+            labels[index] = options[index].label;
+        }
+
+        int selectedIndex = UpdateManager.getTtsVoiceIndex(
+                english,
+                UpdateManager.getTtsVoice(this, english)
+        );
+
+        new AlertDialog.Builder(this)
+                .setTitle(english ? "English voice" : "Spanish voice")
+                .setSingleChoiceItems(labels, selectedIndex, (dialog, which) -> {
+                    UpdateManager.setTtsVoice(this, english, options[which].id);
+                    updateVoiceCard();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void updateVoiceCard() {
+        if (voiceSubtitleText == null || voiceButton == null) {
+            return;
+        }
+
+        boolean english = UpdateManager.isEnglish(this);
+        String voiceId = UpdateManager.getTtsVoice(this, english);
+        voiceSubtitleText.setText(english
+                ? "English voices are shown while English is selected"
+                : "Spanish voices are shown while Spanish is selected");
+        voiceButton.setText(UpdateManager.getTtsVoiceLabel(english, voiceId));
     }
 
     private void updateInstalledVersionText() {

@@ -6,8 +6,11 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Html;
 import android.text.Spanned;
 import android.view.Gravity;
@@ -16,6 +19,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -23,9 +27,12 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +45,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private static final int COLOR_BACKGROUND = Color.rgb(247, 248, 246);
@@ -57,8 +66,21 @@ public class MainActivity extends Activity {
     private static final int RANK_FEAST = 2;
     private static final int RANK_SOLEMNITY = 3;
 
+    private static final String TTS_SPEECH_URL = "https://ttsapi.host2.gleeze.com/v1/audio/speech";
+    private static final String TTS_MODEL = "kokoro";
+
     private final Locale spanishLocale = new Locale("es", "ES");
     private final List<TextView> resizableTextViews = new ArrayList<>();
+    private final Handler ttsProgressHandler = new Handler(Looper.getMainLooper());
+    private final Runnable ttsProgressTick = new Runnable() {
+        @Override
+        public void run() {
+            updateTtsProgress();
+            if (ttsPlayer != null && ttsPlayer.isPlaying()) {
+                ttsProgressHandler.postDelayed(this, 500);
+            }
+        }
+    };
 
     private ExecutorService executor;
     private SharedPreferences preferences;
@@ -78,9 +100,18 @@ public class MainActivity extends Activity {
     private Button retryButton;
     private LinearLayout fontPanel;
     private TextView fontValueText;
+    private LinearLayout ttsPlayerPanel;
+    private TextView ttsStatusText;
+    private Button ttsPlayButton;
+    private SeekBar ttsSeekBar;
+    private TextView ttsTimeText;
+    private MediaPlayer ttsPlayer;
+    private File ttsAudioFile;
+    private String currentTtsText = "";
     private Calendar selectedDateCalendar;
     private Calendar visibleMonthCalendar;
     private int loadGeneration;
+    private int ttsGeneration;
     private float readingFontSp;
     private boolean isEnglish;
 
@@ -108,9 +139,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        loadGeneration++;
+        ttsGeneration++;
         if (executor != null) {
             executor.shutdownNow();
         }
+        ttsProgressHandler.removeCallbacks(ttsProgressTick);
+        releaseTtsPlayer();
+        deleteTtsAudioFile();
     }
 
     @Override
@@ -1095,6 +1131,7 @@ public class MainActivity extends Activity {
     }
 
     private void showLoading(Date date, String url) {
+        resetTtsForNewReading();
         resizableTextViews.clear();
         sectionsLayout.removeAllViews();
         statusBlock.setVisibility(View.VISIBLE);
@@ -1113,6 +1150,7 @@ public class MainActivity extends Activity {
     }
 
     private void renderReading(DailyReading reading) {
+        resetTtsForNewReading();
         statusBlock.setVisibility(View.GONE);
         progressBar.setVisibility(View.GONE);
         retryButton.setVisibility(View.GONE);
@@ -1145,6 +1183,7 @@ public class MainActivity extends Activity {
     }
 
     private void showError(Exception error, String url) {
+        resetTtsForNewReading();
         statusBlock.setVisibility(View.VISIBLE);
         progressBar.setVisibility(View.GONE);
         retryButton.setVisibility(View.VISIBLE);
@@ -1153,6 +1192,401 @@ public class MainActivity extends Activity {
         statusText.setText(isEnglish ? "Could not load today's reading. Check your connection and try again.\n\n" : "No se pudo cargar la lectura de hoy. Revisa la conexión e intenta de nuevo.\n\n"
                 + cleanErrorMessage(error));
         sourceText.setText((isEnglish ? "Intended source: " : "Fuente prevista: ") + "Vatican News\n" + url);
+    }
+
+    private Button createOutlinedButton(String text) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextColor(COLOR_ACCENT);
+        button.setTextSize(14);
+        button.setAllCaps(false);
+        button.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
+        return button;
+    }
+
+    private void startTtsConversionForText(String text, TtsControls controls) {
+        activateTtsControls(controls);
+        currentTtsText = text == null ? "" : text;
+        startTtsConversion();
+    }
+
+    private void activateTtsControls(TtsControls controls) {
+        if (controls == null) {
+            return;
+        }
+
+        if (ttsPlayerPanel != null && ttsPlayerPanel != controls.playerPanel) {
+            ttsPlayerPanel.setVisibility(View.GONE);
+        }
+        if (ttsStatusText != null && ttsStatusText != controls.statusText) {
+            ttsStatusText.setText("");
+            ttsStatusText.setVisibility(View.GONE);
+        }
+        if (ttsPlayButton != null && ttsPlayButton != controls.playButton) {
+            ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
+        }
+        if (ttsSeekBar != null && ttsSeekBar != controls.seekBar) {
+            ttsSeekBar.setProgress(0);
+            ttsSeekBar.setMax(0);
+        }
+        if (ttsTimeText != null && ttsTimeText != controls.timeText) {
+            ttsTimeText.setText("0:00");
+        }
+
+        ttsStatusText = controls.statusText;
+        ttsPlayerPanel = controls.playerPanel;
+        ttsPlayButton = controls.playButton;
+        ttsSeekBar = controls.seekBar;
+        ttsTimeText = controls.timeText;
+    }
+
+    private void startTtsConversion() {
+        String text = currentTtsText == null ? "" : currentTtsText.trim();
+        if (text.isEmpty()) {
+            return;
+        }
+
+        int generation = ++ttsGeneration;
+        stopTtsProgressUpdates();
+        releaseTtsPlayer();
+        deleteTtsAudioFile();
+        setTtsStatus(isEnglish ? "Creating audio..." : "Generando audio...");
+        if (ttsPlayerPanel != null) {
+            ttsPlayerPanel.setVisibility(View.GONE);
+        }
+
+        executor.submit(() -> {
+            try {
+                File audioFile = downloadTtsAudio(text);
+                runOnUiThread(() -> {
+                    if (generation == ttsGeneration) {
+                        showTtsAudioReady(audioFile);
+                    } else if (audioFile.exists()) {
+                        audioFile.delete();
+                    }
+                });
+            } catch (Exception error) {
+                runOnUiThread(() -> {
+                    if (generation == ttsGeneration) {
+                        showTtsError(error);
+                    }
+                });
+            }
+        });
+    }
+
+    private File downloadTtsAudio(String text) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(TTS_SPEECH_URL).openConnection();
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(120000);
+        connection.setRequestMethod("POST");
+        connection.setDoOutput(true);
+        connection.setRequestProperty("User-Agent", "BibliaDiaria/1.0 Android");
+        connection.setRequestProperty("Accept", "audio/mpeg");
+        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+
+        JSONObject body = new JSONObject();
+        body.put("model", TTS_MODEL);
+        body.put("voice", UpdateManager.getTtsVoice(this, isEnglish));
+        body.put("input", text);
+        body.put("response_format", "mp3");
+        body.put("speed", 1.0);
+
+        byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+        connection.setFixedLengthStreamingMode(payload.length);
+        try (OutputStream stream = connection.getOutputStream()) {
+            stream.write(payload);
+        }
+
+        int responseCode = connection.getResponseCode();
+        if (responseCode < 200 || responseCode >= 300) {
+            String details = "";
+            InputStream errorStream = connection.getErrorStream();
+            if (errorStream != null) {
+                details = readStream(errorStream);
+            }
+            connection.disconnect();
+            throw new IOException((isEnglish ? "TTS API responded with code " : "La API TTS respondio con codigo ")
+                    + responseCode
+                    + (details.isEmpty() ? "." : ". " + details));
+        }
+
+        File outputFile = File.createTempFile("daily-reading-tts-", ".mp3", getCacheDir());
+        try (InputStream input = connection.getInputStream();
+             FileOutputStream output = new FileOutputStream(outputFile)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+        } finally {
+            connection.disconnect();
+        }
+        return outputFile;
+    }
+
+    private void showTtsAudioReady(File audioFile) {
+        try {
+            releaseTtsPlayer();
+            deleteTtsAudioFile();
+            ttsAudioFile = audioFile;
+            ttsPlayer = new MediaPlayer();
+            ttsPlayer.setDataSource(audioFile.getAbsolutePath());
+            ttsPlayer.setOnCompletionListener(player -> {
+                stopTtsProgressUpdates();
+                if (ttsPlayButton != null) {
+                    ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
+                }
+                updateTtsProgress();
+            });
+            ttsPlayer.prepare();
+
+            if (ttsSeekBar != null) {
+                ttsSeekBar.setMax(ttsPlayer.getDuration());
+                ttsSeekBar.setProgress(0);
+            }
+            updateTtsTimeText(0, ttsPlayer.getDuration());
+            if (ttsPlayerPanel != null) {
+                ttsPlayerPanel.setVisibility(View.VISIBLE);
+            }
+            setTtsStatus(isEnglish ? "Audio ready." : "Audio listo.");
+        } catch (Exception error) {
+            if (audioFile.exists()) {
+                audioFile.delete();
+            }
+            showTtsError(error);
+        }
+    }
+
+    private void showTtsError(Exception error) {
+        releaseTtsPlayer();
+        deleteTtsAudioFile();
+        if (ttsPlayerPanel != null) {
+            ttsPlayerPanel.setVisibility(View.GONE);
+        }
+        setTtsStatus((isEnglish ? "Could not create audio. " : "No se pudo crear el audio. ")
+                + cleanErrorMessage(error));
+    }
+
+    private void toggleTtsPlayback() {
+        if (ttsPlayer == null) {
+            return;
+        }
+
+        if (ttsPlayer.isPlaying()) {
+            ttsPlayer.pause();
+            stopTtsProgressUpdates();
+            if (ttsPlayButton != null) {
+                ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
+            }
+            updateTtsProgress();
+        } else {
+            ttsPlayer.start();
+            if (ttsPlayButton != null) {
+                ttsPlayButton.setText(isEnglish ? "Pause" : "Pausar");
+            }
+            ttsProgressHandler.post(ttsProgressTick);
+        }
+    }
+
+    private void updateTtsProgress() {
+        if (ttsPlayer == null || ttsSeekBar == null) {
+            return;
+        }
+
+        int position = ttsPlayer.getCurrentPosition();
+        int duration = ttsPlayer.getDuration();
+        ttsSeekBar.setProgress(position);
+        updateTtsTimeText(position, duration);
+    }
+
+    private void updateTtsTimeText(int positionMillis, int durationMillis) {
+        if (ttsTimeText == null) {
+            return;
+        }
+        ttsTimeText.setText(formatAudioTime(positionMillis) + " / " + formatAudioTime(durationMillis));
+    }
+
+    private String formatAudioTime(int millis) {
+        int totalSeconds = Math.max(0, millis / 1000);
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        return String.format(Locale.US, "%d:%02d", minutes, seconds);
+    }
+
+    private void setTtsStatus(String text) {
+        if (ttsStatusText != null) {
+            ttsStatusText.setText(text);
+            ttsStatusText.setVisibility(text == null || text.isEmpty() ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private void resetTtsForNewReading() {
+        ttsGeneration++;
+        currentTtsText = "";
+        stopTtsProgressUpdates();
+        releaseTtsPlayer();
+        deleteTtsAudioFile();
+        if (ttsStatusText != null) {
+            ttsStatusText.setText("");
+            ttsStatusText.setVisibility(View.GONE);
+        }
+        if (ttsPlayerPanel != null) {
+            ttsPlayerPanel.setVisibility(View.GONE);
+        }
+        if (ttsPlayButton != null) {
+            ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
+        }
+        if (ttsSeekBar != null) {
+            ttsSeekBar.setProgress(0);
+            ttsSeekBar.setMax(0);
+        }
+        if (ttsTimeText != null) {
+            ttsTimeText.setText("0:00");
+        }
+    }
+
+    private void stopTtsProgressUpdates() {
+        ttsProgressHandler.removeCallbacks(ttsProgressTick);
+    }
+
+    private void releaseTtsPlayer() {
+        if (ttsPlayer != null) {
+            ttsPlayer.release();
+            ttsPlayer = null;
+        }
+    }
+
+    private void deleteTtsAudioFile() {
+        if (ttsAudioFile != null && ttsAudioFile.exists()) {
+            ttsAudioFile.delete();
+        }
+        ttsAudioFile = null;
+    }
+
+    private void addSpeechSection(List<String> parts, String title, DailySection section) {
+        if (section == null || section.body.isEmpty()) {
+            return;
+        }
+
+        StringBuilder builder = new StringBuilder(title);
+        if (!section.introduction.isEmpty()) {
+            builder.append("\n").append(section.introduction);
+        }
+        if (!section.reference.isEmpty()) {
+            builder.append("\n").append(section.reference);
+        }
+        builder.append("\n").append(section.body);
+        parts.add(builder.toString());
+    }
+
+    private String buildSectionSpeechText(String title, DailySection section) {
+        List<String> parts = new ArrayList<>();
+        addSpeechSection(parts, title, section);
+        if (parts.isEmpty()) {
+            return "";
+        }
+        return normalizeWhitespace(parts.get(0));
+    }
+
+    private View createSpeakerTitleRow(String title, int titleSizeSp, String speechText, TtsControls controls) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView titleText = textView(title, titleSizeSp, COLOR_INK, Typeface.BOLD);
+        titleText.setIncludeFontPadding(false);
+        row.addView(titleText, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+
+        ImageButton speakerButton = new ImageButton(this);
+        speakerButton.setImageResource(R.drawable.ic_speaker_24);
+        speakerButton.setColorFilter(COLOR_ACCENT);
+        speakerButton.setPadding(dp(8), dp(8), dp(8), dp(8));
+        speakerButton.setBackground(roundedRect(Color.rgb(229, 244, 240), dp(8), Color.TRANSPARENT, 0));
+        speakerButton.setContentDescription((isEnglish ? "Listen to " : "Escuchar ") + title);
+        speakerButton.setOnClickListener(view -> startTtsConversionForText(speechText, controls));
+
+        LinearLayout.LayoutParams speakerParams = new LinearLayout.LayoutParams(dp(40), dp(40));
+        speakerParams.setMargins(dp(8), 0, 0, 0);
+        row.addView(speakerButton, speakerParams);
+        return row;
+    }
+
+    private TtsControls createTtsControls() {
+        TextView status = textView("", 14, COLOR_MUTED, Typeface.BOLD);
+        status.setVisibility(View.GONE);
+
+        LinearLayout playerPanel = new LinearLayout(this);
+        playerPanel.setOrientation(LinearLayout.HORIZONTAL);
+        playerPanel.setGravity(Gravity.CENTER_VERTICAL);
+        playerPanel.setVisibility(View.GONE);
+
+        Button playButton = createOutlinedButton(isEnglish ? "Play" : "Reproducir");
+        playerPanel.addView(playButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(42)
+        ));
+
+        SeekBar seekBar = new SeekBar(this);
+        seekBar.setMax(0);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && seekBar == ttsSeekBar && ttsPlayer != null) {
+                    ttsPlayer.seekTo(progress);
+                    updateTtsTimeText(progress, ttsPlayer.getDuration());
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+        LinearLayout.LayoutParams seekParams = new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f
+        );
+        seekParams.setMargins(dp(8), 0, dp(8), 0);
+        playerPanel.addView(seekBar, seekParams);
+
+        TextView timeText = textView("0:00", 13, COLOR_MUTED, Typeface.BOLD);
+        timeText.setGravity(Gravity.CENTER_VERTICAL);
+        playerPanel.addView(timeText, new LinearLayout.LayoutParams(
+                dp(86),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        TtsControls controls = new TtsControls(status, playerPanel, playButton, seekBar, timeText);
+        playButton.setOnClickListener(view -> {
+            activateTtsControls(controls);
+            toggleTtsPlayback();
+        });
+        return controls;
+    }
+
+    private void addTtsControlsToCard(LinearLayout card, TtsControls controls) {
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        statusParams.setMargins(0, 0, 0, dp(10));
+        card.addView(controls.statusText, statusParams);
+
+        LinearLayout.LayoutParams playerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        playerParams.setMargins(0, 0, 0, dp(14));
+        card.addView(controls.playerPanel, playerParams);
     }
 
     private void addScriptureCard(String title, String overline, DailySection section, boolean featured) {
@@ -1167,14 +1601,20 @@ public class MainActivity extends Activity {
             card.addView(overlineText);
         }
 
-        TextView titleText = textView(title, featured ? 28 : 22, COLOR_INK, Typeface.BOLD);
-        titleText.setIncludeFontPadding(false);
+        TtsControls ttsControls = createTtsControls();
+        View titleRow = createSpeakerTitleRow(
+                title,
+                featured ? 28 : 22,
+                buildSectionSpeechText(title, section),
+                ttsControls
+        );
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         titleParams.setMargins(0, overline == null ? 0 : dp(8), 0, dp(12));
-        card.addView(titleText, titleParams);
+        card.addView(titleRow, titleParams);
+        addTtsControlsToCard(card, ttsControls);
 
         if (!section.introduction.isEmpty()) {
             TextView introText = textView(section.introduction, 16, COLOR_MUTED, Typeface.BOLD);
@@ -1211,9 +1651,15 @@ public class MainActivity extends Activity {
 
         LinearLayout card = createCard(dp(18));
 
-        TextView title = textView(isEnglish ? "The Pope's words" : "Las palabras de los Papas", 22, COLOR_INK, Typeface.BOLD);
-        title.setIncludeFontPadding(false);
-        card.addView(title);
+        String title = isEnglish ? "The Pope's words" : "Las palabras de los Papas";
+        TtsControls ttsControls = createTtsControls();
+        card.addView(createSpeakerTitleRow(
+                title,
+                22,
+                buildSectionSpeechText(title, section),
+                ttsControls
+        ));
+        addTtsControlsToCard(card, ttsControls);
 
         TextView body = textView(section.body, Math.round(readingFontSp), COLOR_INK, Typeface.NORMAL);
         body.setLineSpacing(dp(4), 1.16f);
@@ -1668,6 +2114,28 @@ public class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private static class TtsControls {
+        final TextView statusText;
+        final LinearLayout playerPanel;
+        final Button playButton;
+        final SeekBar seekBar;
+        final TextView timeText;
+
+        TtsControls(
+                TextView statusText,
+                LinearLayout playerPanel,
+                Button playButton,
+                SeekBar seekBar,
+                TextView timeText
+        ) {
+            this.statusText = statusText;
+            this.playerPanel = playerPanel;
+            this.playButton = playButton;
+            this.seekBar = seekBar;
+            this.timeText = timeText;
+        }
     }
 
     private static class LiturgicalDay {
