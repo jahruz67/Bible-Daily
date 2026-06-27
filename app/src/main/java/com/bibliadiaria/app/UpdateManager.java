@@ -205,11 +205,12 @@ final class UpdateManager {
                 ? String.valueOf(info.latestVersionCode)
                 : info.latestVersionName + " (" + info.latestVersionCode + ")";
 
+        boolean english = isEnglish(activity);
         new AlertDialog.Builder(activity)
-                .setTitle("Update available")
-                .setMessage("Version " + version + " is ready to download.")
-                .setPositiveButton("Download", (dialog, which) -> openDownload(activity, info.apkUrl))
-                .setNegativeButton("Later", null)
+                .setTitle(english ? "Update available" : "Actualización disponible")
+                .setMessage((english ? "Version " : "Versión ") + version + (english ? " is ready to download." : " está lista para descargar."))
+                .setPositiveButton(english ? "Download" : "Descargar", (dialog, which) -> openDownload(activity, info.apkUrl))
+                .setNegativeButton(english ? "Later" : "Después", null)
                 .show();
     }
 

@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        sourceText = textView("Fuente: Vatican News", 13, COLOR_MUTED, Typeface.NORMAL);
+        sourceText = textView(isEnglish ? "Source: Vatican News" : "Fuente: Vatican News", 13, COLOR_MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams sourceParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -319,7 +319,7 @@ public class MainActivity extends Activity {
     }
 
     private View createExtrasButton() {
-        TextView button = textView("Extras", 15, Color.WHITE, Typeface.BOLD);
+        TextView button = textView(isEnglish ? "Extras" : "Extras", 15, Color.WHITE, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setPadding(dp(16), 0, dp(16), 0);
         button.setBackground(roundedRect(COLOR_ACCENT, dp(8), Color.TRANSPARENT, 0));
@@ -409,9 +409,9 @@ public class MainActivity extends Activity {
         );
         quickParams.setMargins(0, dp(10), 0, dp(6));
 
-        quickRow.addView(smallCalendarButton("- Año", view -> changeVisibleYear(-1)));
-        quickRow.addView(smallCalendarButton("Hoy", view -> selectDate(Calendar.getInstance())));
-        quickRow.addView(smallCalendarButton("+ Año", view -> changeVisibleYear(1)));
+        quickRow.addView(smallCalendarButton(isEnglish ? "- Year" : "- Año", view -> changeVisibleYear(-1)));
+        quickRow.addView(smallCalendarButton(isEnglish ? "Today" : "Hoy", view -> selectDate(Calendar.getInstance())));
+        quickRow.addView(smallCalendarButton(isEnglish ? "+ Year" : "+ Año", view -> changeVisibleYear(1)));
         panel.addView(quickRow, quickParams);
 
         LinearLayout weekdays = new LinearLayout(this);
@@ -445,7 +445,7 @@ public class MainActivity extends Activity {
         button.setGravity(Gravity.CENTER);
         button.setBackground(roundedRect(Color.rgb(229, 244, 240), dp(8), Color.TRANSPARENT, 0));
         button.setOnClickListener(listener);
-        button.setContentDescription(text.equals("<") ? "Mes anterior" : "Mes siguiente");
+        button.setContentDescription(text.equals("<") ? (isEnglish ? "Previous month" : "Mes anterior") : (isEnglish ? "Next month" : "Mes siguiente"));
         return button;
     }
 
@@ -997,7 +997,7 @@ public class MainActivity extends Activity {
         progressParams.setMargins(0, 0, dp(12), 0);
         row.addView(progressBar, progressParams);
 
-        statusText = textView("Cargando la Palabra de hoy...", 16, COLOR_INK, Typeface.NORMAL);
+        statusText = textView(isEnglish ? "Loading today's Word..." : "Cargando la Palabra de hoy...", 16, COLOR_INK, Typeface.NORMAL);
         statusText.setLineSpacing(0, 1.16f);
         row.addView(statusText, new LinearLayout.LayoutParams(
                 0,
@@ -1007,7 +1007,7 @@ public class MainActivity extends Activity {
         statusBlock.addView(row);
 
         retryButton = new Button(this);
-        retryButton.setText("Reintentar");
+        retryButton.setText(isEnglish ? "Retry" : "Reintentar");
         retryButton.setTextColor(Color.WHITE);
         retryButton.setTextSize(14);
         retryButton.setAllCaps(false);
@@ -1043,7 +1043,7 @@ public class MainActivity extends Activity {
         LinearLayout labelRow = new LinearLayout(this);
         labelRow.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView label = textView("Tamaño de letra", 15, COLOR_INK, Typeface.BOLD);
+        TextView label = textView(isEnglish ? "Font size" : "Tamaño de letra", 15, COLOR_INK, Typeface.BOLD);
         labelRow.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         fontValueText = textView(Math.round(readingFontSp) + " sp", 14, COLOR_MUTED, Typeface.BOLD);
@@ -1954,7 +1954,7 @@ public class MainActivity extends Activity {
         DailySection papalWords = DailySection.reflection(cleanSectionText(papalText));
 
         if (gospel.body.isEmpty() && firstReading.body.isEmpty() && papalWords.body.isEmpty()) {
-            throw new IOException("No encontré las secciones esperadas en la página.");
+            throw new IOException(isEnglish ? "Could not find the expected sections on the page." : "No encontré las secciones esperadas en la página.");
         }
 
         return new DailyReading(

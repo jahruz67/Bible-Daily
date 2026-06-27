@@ -35,6 +35,7 @@ public class SettingsActivity extends Activity {
     private TextView voiceSubtitleText;
     private TextView voiceButton;
     private UpdateManager.UpdateInfo latestInfo;
+    private boolean isEnglish;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +47,7 @@ public class SettingsActivity extends Activity {
         }
 
         executor = Executors.newSingleThreadExecutor();
+        isEnglish = UpdateManager.isEnglish(this);
         setContentView(createScreen());
         updateInstalledVersionText();
     }
@@ -89,7 +91,7 @@ public class SettingsActivity extends Activity {
         content.addView(createVoiceCard());
         content.addView(createVersionCard());
 
-        checkButton = actionButton("Check now", COLOR_ACCENT, Color.WHITE);
+        checkButton = actionButton(isEnglish ? "Check now" : "Comprobar", COLOR_ACCENT, Color.WHITE);
         checkButton.setOnClickListener(view -> checkForUpdate());
         LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -142,7 +144,7 @@ public class SettingsActivity extends Activity {
                 1f
         ));
 
-        TextView back = textView("Extras", 15, COLOR_ACCENT, Typeface.BOLD);
+        TextView back = textView(isEnglish ? "Extras" : "Extras", 15, COLOR_ACCENT, Typeface.BOLD);
         back.setGravity(Gravity.CENTER);
         back.setPadding(dp(14), 0, dp(14), 0);
         back.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
@@ -181,11 +183,11 @@ public class SettingsActivity extends Activity {
                 1f
         ));
 
-        TextView langToggle = actionButton(UpdateManager.isEnglish(this) ? "English" : "Spanish", COLOR_ACCENT, Color.WHITE);
+        TextView langToggle = actionButton(UpdateManager.isEnglish(this) ? "English" : "Español", COLOR_ACCENT, Color.WHITE);
         langToggle.setOnClickListener(view -> {
             boolean current = UpdateManager.isEnglish(this);
             UpdateManager.setEnglish(this, !current);
-            langToggle.setText(!current ? "English" : "Spanish");
+            langToggle.setText(!current ? "English" : "Español");
             updateVoiceCard();
         });
         card.addView(langToggle, new LinearLayout.LayoutParams(dp(100), dp(40)));
@@ -336,17 +338,18 @@ public class SettingsActivity extends Activity {
         String voiceId = UpdateManager.getTtsVoice(this, english);
         voiceSubtitleText.setText(english
                 ? "English voices are shown while English is selected"
-                : "Spanish voices are shown while Spanish is selected");
+                : "Las voces en español se muestran mientras el español esté seleccionado");
         voiceButton.setText(UpdateManager.getTtsVoiceLabel(english, voiceId));
     }
 
     private void updateInstalledVersionText() {
         try {
-            installedVersionText.setText("Installed: "
-                    + UpdateManager.getInstalledVersionName(this)
-                    + " (" + UpdateManager.getInstalledVersionCode(this) + ")");
+            installedVersionText.setText(
+                    (isEnglish ? "Installed: " : "Instalada: ")
+                            + UpdateManager.getInstalledVersionName(this)
+                            + " (" + UpdateManager.getInstalledVersionCode(this) + ")");
         } catch (Exception error) {
-            installedVersionText.setText("Installed version unavailable.");
+            installedVersionText.setText(isEnglish ? "Installed version unavailable." : "Versión instalada no disponible.");
         }
     }
 

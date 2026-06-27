@@ -23,6 +23,8 @@ public class ExtrasActivity extends Activity {
     private static final int COLOR_ACCENT = Color.rgb(0, 107, 90);
     private static final int COLOR_WARM = Color.rgb(217, 75, 61);
 
+    private boolean isEnglish;
+
     private static final String VENI_CREATOR_PRAYER =
             "Ven, Esp\u00edritu Creador,\n"
                     + "visita las almas de tus fieles\n"
@@ -135,12 +137,24 @@ public class ExtrasActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        isEnglish = UpdateManager.isEnglish(this);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().setStatusBarColor(COLOR_BACKGROUND);
             getWindow().setNavigationBarColor(COLOR_BACKGROUND);
         }
 
         setContentView(createScreen());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        boolean currentLanguage = UpdateManager.isEnglish(this);
+        if (currentLanguage != isEnglish) {
+            isEnglish = currentLanguage;
+            recreate();
+        }
     }
 
     @Override
@@ -170,7 +184,7 @@ public class ExtrasActivity extends Activity {
 
         content.addView(createTopBar());
 
-        titleText = textView("Extras", 34, COLOR_INK, Typeface.BOLD);
+        titleText = textView(isEnglish ? "Extras" : "Extras", 34, COLOR_INK, Typeface.BOLD);
         titleText.setIncludeFontPadding(false);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -221,14 +235,14 @@ public class ExtrasActivity extends Activity {
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView label = textView("ORACIONES", 12, COLOR_ACCENT, Typeface.BOLD);
+        TextView label = textView(isEnglish ? "PRAYERS" : "ORACIONES", 12, COLOR_ACCENT, Typeface.BOLD);
         topBar.addView(label, new LinearLayout.LayoutParams(
                 0,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 1f
         ));
 
-        TextView settings = textView("Ajustes", 15, COLOR_ACCENT, Typeface.BOLD);
+        TextView settings = textView(isEnglish ? "Settings" : "Ajustes", 15, COLOR_ACCENT, Typeface.BOLD);
         settings.setGravity(Gravity.CENTER);
         settings.setPadding(dp(14), 0, dp(14), 0);
         settings.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
@@ -240,7 +254,7 @@ public class ExtrasActivity extends Activity {
         settingsParams.setMargins(0, 0, dp(8), 0);
         topBar.addView(settings, settingsParams);
 
-        TextView home = textView("Inicio", 15, COLOR_ACCENT, Typeface.BOLD);
+        TextView home = textView(isEnglish ? "Home" : "Inicio", 15, COLOR_ACCENT, Typeface.BOLD);
         home.setGravity(Gravity.CENTER);
         home.setPadding(dp(14), 0, dp(14), 0);
         home.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
@@ -316,7 +330,7 @@ public class ExtrasActivity extends Activity {
         prayerParams.setMargins(0, dp(16), 0, dp(18));
         detailContainer.addView(prayer, prayerParams);
 
-        TextView backToList = textView("Volver a extras", 15, COLOR_ACCENT, Typeface.BOLD);
+        TextView backToList = textView(isEnglish ? "Back to extras" : "Volver a extras", 15, COLOR_ACCENT, Typeface.BOLD);
         backToList.setGravity(Gravity.CENTER);
         backToList.setPadding(dp(14), 0, dp(14), 0);
         backToList.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
@@ -337,7 +351,7 @@ public class ExtrasActivity extends Activity {
     }
 
     private void showPrayerList() {
-        titleText.setText("Extras");
+        titleText.setText(isEnglish ? "Extras" : "Extras");
         detailContainer.setVisibility(View.GONE);
         listContainer.setVisibility(View.VISIBLE);
         scrollToTop();
