@@ -28,6 +28,7 @@ import android.widget.TextView;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -68,6 +69,10 @@ public class MainActivity extends Activity {
 
     private static final String TTS_SPEECH_URL = "https://ttsapi.host2.gleeze.com/v1/audio/speech";
     private static final String TTS_MODEL = "kokoro";
+    private static final String READING_CACHE_DIR = "reading-cache";
+    private static final String PREFETCH_MONTH_PREFIX = "prefetch_month_";
+    private static final int NEXT_MONTH_PREFETCH_DAY = 26;
+    private static final int PREFETCH_RETRY_DELAY_HOURS = 6;
 
     private final Locale spanishLocale = new Locale("es", "ES");
     private final List<TextView> resizableTextViews = new ArrayList<>();
@@ -83,6 +88,7 @@ public class MainActivity extends Activity {
     };
 
     private ExecutorService executor;
+    private ExecutorService prefetchExecutor;
     private SharedPreferences preferences;
     private LinearLayout sectionsLayout;
     private TextView dateText;
@@ -130,6 +136,7 @@ public class MainActivity extends Activity {
         selectedDateCalendar = startOfDay(Calendar.getInstance());
         visibleMonthCalendar = startOfMonth(selectedDateCalendar);
         executor = Executors.newSingleThreadExecutor();
+        prefetchExecutor = Executors.newSingleThreadExecutor();
 
         setContentView(createScreen());
         loadToday();
@@ -143,6 +150,9 @@ public class MainActivity extends Activity {
         ttsGeneration++;
         if (executor != null) {
             executor.shutdownNow();
+        }
+        if (prefetchExecutor != null) {
+            prefetchExecutor.shutdownNow();
         }
         ttsProgressHandler.removeCallbacks(ttsProgressTick);
         releaseTtsPlayer();
@@ -1108,24 +1118,37 @@ public class MainActivity extends Activity {
     private void loadDate(Date date) {
         String url = buildVaticanUrl(date);
         int generation = ++loadGeneration;
+        DailyReading cachedReading = readCachedReading(date);
 
-        showLoading(date, url);
+        if (cachedReading == null) {
+            showLoading(date, url);
+        } else {
+            renderReading(cachedReading);
+            schedulePrefetchNearbyMonths();
+        }
 
         executor.submit(() -> {
             try {
                 String html = download(url);
                 DailyReading reading = parseDailyReading(html, date, url);
-                runOnUiThread(() -> {
-                    if (generation == loadGeneration) {
-                        renderReading(reading);
-                    }
-                });
+                writeCachedReading(date, reading);
+                if (cachedReading == null) {
+                    runOnUiThread(() -> {
+                        if (generation == loadGeneration) {
+                            renderReading(reading);
+                        }
+                    });
+                }
             } catch (Exception error) {
-                runOnUiThread(() -> {
-                    if (generation == loadGeneration) {
-                        showError(error, url);
-                    }
-                });
+                if (cachedReading == null) {
+                    runOnUiThread(() -> {
+                        if (generation == loadGeneration) {
+                            showError(error, url);
+                        }
+                    });
+                }
+            } finally {
+                schedulePrefetchNearbyMonths();
             }
         });
     }
@@ -1192,6 +1215,163 @@ public class MainActivity extends Activity {
         statusText.setText(isEnglish ? "Could not load today's reading. Check your connection and try again.\n\n" : "No se pudo cargar la lectura de hoy. Revisa la conexión e intenta de nuevo.\n\n"
                 + cleanErrorMessage(error));
         sourceText.setText((isEnglish ? "Intended source: " : "Fuente prevista: ") + "Vatican News\n" + url);
+    }
+
+    private void schedulePrefetchNearbyMonths() {
+        if (prefetchExecutor == null || prefetchExecutor.isShutdown()) {
+            return;
+        }
+        try {
+            prefetchExecutor.submit(this::prefetchNearbyMonths);
+        } catch (RuntimeException ignored) {
+            // The activity may be closing while a background cache refresh is being scheduled.
+        }
+    }
+
+    private void prefetchNearbyMonths() {
+        Calendar today = startOfDay(Calendar.getInstance());
+        Calendar currentMonth = startOfMonth(today);
+        prefetchMonth(currentMonth);
+
+        if (today.get(Calendar.DAY_OF_MONTH) >= NEXT_MONTH_PREFETCH_DAY) {
+            Calendar nextMonth = startOfMonth(today);
+            nextMonth.add(Calendar.MONTH, 1);
+            prefetchMonth(nextMonth);
+        }
+    }
+
+    private void prefetchMonth(Calendar monthCalendar) {
+        if (monthCalendar == null || !hasMissingCacheEntries(monthCalendar)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        String attemptKey = PREFETCH_MONTH_PREFIX + cacheLanguageKey() + "_" + formatMonthCacheKey(monthCalendar.getTime());
+        long lastAttempt = preferences.getLong(attemptKey, 0L);
+        long retryDelayMillis = PREFETCH_RETRY_DELAY_HOURS * 60L * 60L * 1000L;
+        if (lastAttempt > 0 && now - lastAttempt < retryDelayMillis) {
+            return;
+        }
+        preferences.edit().putLong(attemptKey, now).apply();
+
+        Calendar cursor = startOfMonth(monthCalendar);
+        int daysInMonth = cursor.getActualMaximum(Calendar.DAY_OF_MONTH);
+        for (int day = 1; day <= daysInMonth; day++) {
+            if (Thread.currentThread().isInterrupted()) {
+                return;
+            }
+            cursor.set(Calendar.DAY_OF_MONTH, day);
+            Date date = cursor.getTime();
+            if (cacheFile(date).exists()) {
+                continue;
+            }
+
+            String url = buildVaticanUrl(date);
+            try {
+                DailyReading reading = parseDailyReading(download(url), date, url);
+                writeCachedReading(date, reading);
+            } catch (Exception ignored) {
+                // A missing future page or temporary network issue should not block the rest of the cache.
+            }
+        }
+    }
+
+    private boolean hasMissingCacheEntries(Calendar monthCalendar) {
+        Calendar cursor = startOfMonth(monthCalendar);
+        int daysInMonth = cursor.getActualMaximum(Calendar.DAY_OF_MONTH);
+        for (int day = 1; day <= daysInMonth; day++) {
+            cursor.set(Calendar.DAY_OF_MONTH, day);
+            if (!cacheFile(cursor.getTime()).exists()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private DailyReading readCachedReading(Date date) {
+        File file = cacheFile(date);
+        if (!file.exists()) {
+            return null;
+        }
+
+        try (InputStream stream = new FileInputStream(file)) {
+            JSONObject json = new JSONObject(readStream(stream));
+            DailySection firstReading = readCachedSection(json.optJSONObject("firstReading"));
+            DailySection gospel = readCachedSection(json.optJSONObject("gospel"));
+            DailySection papalWords = readCachedSection(json.optJSONObject("papalWords"));
+            if (firstReading.body.isEmpty() && gospel.body.isEmpty() && papalWords.body.isEmpty()) {
+                return null;
+            }
+            return new DailyReading(
+                    json.optString("displayDate", formatDisplayDate(date)),
+                    json.optString("liturgicalTitle", ""),
+                    json.optString("sourceUrl", buildVaticanUrl(date)),
+                    firstReading,
+                    gospel,
+                    papalWords
+            );
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    private DailySection readCachedSection(JSONObject json) {
+        if (json == null) {
+            return new DailySection("", "", "");
+        }
+        return new DailySection(
+                json.optString("introduction", ""),
+                json.optString("reference", ""),
+                json.optString("body", "")
+        );
+    }
+
+    private void writeCachedReading(Date date, DailyReading reading) {
+        File file = cacheFile(date);
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            return;
+        }
+
+        try (OutputStream stream = new FileOutputStream(file)) {
+            JSONObject json = new JSONObject();
+            json.put("displayDate", reading.displayDate);
+            json.put("liturgicalTitle", reading.liturgicalTitle);
+            json.put("sourceUrl", reading.sourceUrl);
+            json.put("firstReading", cachedSectionJson(reading.firstReading));
+            json.put("gospel", cachedSectionJson(reading.gospel));
+            json.put("papalWords", cachedSectionJson(reading.papalWords));
+            stream.write(json.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+            // Cache writes are best-effort; the live reading should still render.
+        }
+    }
+
+    private JSONObject cachedSectionJson(DailySection section) throws Exception {
+        JSONObject json = new JSONObject();
+        json.put("introduction", section.introduction);
+        json.put("reference", section.reference);
+        json.put("body", section.body);
+        return json;
+    }
+
+    private File cacheFile(Date date) {
+        return new File(
+                new File(new File(getFilesDir(), READING_CACHE_DIR), cacheLanguageKey()),
+                formatDateCacheKey(date) + ".json"
+        );
+    }
+
+    private String cacheLanguageKey() {
+        return isEnglish ? "en" : "es";
+    }
+
+    private String formatDateCacheKey(Date date) {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(date);
+    }
+
+    private String formatMonthCacheKey(Date date) {
+        return new SimpleDateFormat("yyyy-MM", Locale.US).format(date);
     }
 
     private Button createOutlinedButton(String text) {
