@@ -50,10 +50,29 @@ import java.util.concurrent.Executors;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
-    private static final int COLOR_BACKGROUND = Color.rgb(247, 248, 246);
-    private static final int COLOR_CARD = Color.WHITE;
-    private static final int COLOR_INK = Color.rgb(25, 31, 31);
-    private static final int COLOR_MUTED = Color.rgb(91, 99, 98);
+    // Light mode colors
+    private static final int COLOR_BACKGROUND_LIGHT = Color.rgb(247, 248, 246);
+    private static final int COLOR_CARD_LIGHT = Color.WHITE;
+    private static final int COLOR_INK_LIGHT = Color.rgb(25, 31, 31);
+    private static final int COLOR_MUTED_LIGHT = Color.rgb(91, 99, 98);
+    private static final int COLOR_STROKE_LIGHT = Color.rgb(229, 232, 230);
+    private static final int COLOR_CHIP_BG_LIGHT = Color.rgb(219, 226, 222);
+    private static final int COLOR_SPEAKER_BG_LIGHT = Color.rgb(229, 244, 240);
+    private static final int COLOR_REFERENCE_BG_LIGHT = Color.rgb(229, 244, 240);
+    private static final int COLOR_TODAY_BG_LIGHT = Color.rgb(255, 239, 236);
+
+    // Dark mode colors
+    private static final int COLOR_BACKGROUND_DARK = Color.rgb(26, 28, 30);
+    private static final int COLOR_CARD_DARK = Color.rgb(38, 41, 44);
+    private static final int COLOR_INK_DARK = Color.rgb(224, 226, 219);
+    private static final int COLOR_MUTED_DARK = Color.rgb(158, 163, 160);
+    private static final int COLOR_STROKE_DARK = Color.rgb(58, 62, 65);
+    private static final int COLOR_CHIP_BG_DARK = Color.rgb(48, 52, 55);
+    private static final int COLOR_SPEAKER_BG_DARK = Color.rgb(45, 65, 60);
+    private static final int COLOR_REFERENCE_BG_DARK = Color.rgb(45, 65, 60);
+    private static final int COLOR_TODAY_BG_DARK = Color.rgb(75, 50, 48);
+
+    // Shared colors (no change between modes)
     private static final int COLOR_ACCENT = Color.rgb(0, 107, 90);
     private static final int COLOR_WARM = Color.rgb(217, 75, 61);
     private static final int COLOR_HOLIDAY_BG = Color.rgb(255, 246, 229);
@@ -120,19 +139,21 @@ public class MainActivity extends Activity {
     private int ttsGeneration;
     private float readingFontSp;
     private boolean isEnglish;
+    private boolean isDarkMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(COLOR_BACKGROUND);
-            getWindow().setNavigationBarColor(COLOR_BACKGROUND);
+            getWindow().setStatusBarColor(bg());
+            getWindow().setNavigationBarColor(bg());
         }
 
         preferences = getSharedPreferences("preferencias_lectura", MODE_PRIVATE);
         readingFontSp = preferences.getFloat("tamano_letra", 20f);
         isEnglish = preferences.getBoolean("is_english", false);
+        isDarkMode = preferences.getBoolean("dark_mode", false);
         selectedDateCalendar = startOfDay(Calendar.getInstance());
         visibleMonthCalendar = startOfMonth(selectedDateCalendar);
         executor = Executors.newSingleThreadExecutor();
@@ -163,15 +184,28 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         boolean currentLanguage = UpdateManager.isEnglish(this);
-        if (currentLanguage != isEnglish) {
+        boolean currentDark = UpdateManager.isDarkMode(this);
+        if (currentLanguage != isEnglish || currentDark != isDarkMode) {
             isEnglish = currentLanguage;
+            isDarkMode = currentDark;
             recreate();
         }
     }
 
+    // --- Dark mode aware color helpers ---
+    private int bg() { return isDarkMode ? COLOR_BACKGROUND_DARK : COLOR_BACKGROUND_LIGHT; }
+    private int card() { return isDarkMode ? COLOR_CARD_DARK : COLOR_CARD_LIGHT; }
+    private int ink() { return isDarkMode ? COLOR_INK_DARK : COLOR_INK_LIGHT; }
+    private int muted() { return isDarkMode ? COLOR_MUTED_DARK : COLOR_MUTED_LIGHT; }
+    private int stroke() { return isDarkMode ? COLOR_STROKE_DARK : COLOR_STROKE_LIGHT; }
+    private int chipBg() { return isDarkMode ? COLOR_CHIP_BG_DARK : COLOR_CHIP_BG_LIGHT; }
+    private int speakerBg() { return isDarkMode ? COLOR_SPEAKER_BG_DARK : COLOR_SPEAKER_BG_LIGHT; }
+    private int referenceBg() { return isDarkMode ? COLOR_REFERENCE_BG_DARK : COLOR_REFERENCE_BG_LIGHT; }
+    private int todayBg() { return isDarkMode ? COLOR_TODAY_BG_DARK : COLOR_TODAY_BG_LIGHT; }
+
     private View createScreen() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(COLOR_BACKGROUND);
+        root.setBackgroundColor(bg());
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -195,7 +229,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        sourceText = textView(isEnglish ? "Source: Vatican News" : "Fuente: Vatican News", 13, COLOR_MUTED, Typeface.NORMAL);
+        sourceText = textView(isEnglish ? "Source: Vatican News" : "Fuente: Vatican News", 13, muted(), Typeface.NORMAL);
         LinearLayout.LayoutParams sourceParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -268,7 +302,7 @@ public class MainActivity extends Activity {
         topRow.addView(createDateChip());
         header.addView(topRow);
 
-        TextView title = textView(isEnglish ? "Word of the day" : "Palabra del día", 34, COLOR_INK, Typeface.BOLD);
+        TextView title = textView(isEnglish ? "Word of the day" : "Palabra del día", 34, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -292,7 +326,7 @@ public class MainActivity extends Activity {
         calendarParams.setMargins(0, dp(2), 0, dp(14));
         header.addView(calendarPanel, calendarParams);
 
-        dateText = textView("", 16, COLOR_MUTED, Typeface.BOLD);
+        dateText = textView("", 16, muted(), Typeface.BOLD);
         header.addView(dateText);
 
         holidayTagsRow = new LinearLayout(this);
@@ -306,7 +340,7 @@ public class MainActivity extends Activity {
         tagsParams.setMargins(0, dp(8), 0, 0);
         header.addView(holidayTagsRow, tagsParams);
 
-        liturgyText = textView("", 16, COLOR_INK, Typeface.NORMAL);
+        liturgyText = textView("", 16, ink(), Typeface.NORMAL);
         liturgyText.setLineSpacing(0, 1.12f);
         LinearLayout.LayoutParams liturgyParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -339,7 +373,7 @@ public class MainActivity extends Activity {
         chip.setOrientation(LinearLayout.HORIZONTAL);
         chip.setGravity(Gravity.CENTER_VERTICAL);
         chip.setPadding(dp(12), dp(8), dp(10), dp(8));
-        chip.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
+        chip.setBackground(roundedRect(card(), dp(8), chipBg(), dp(1)));
         chip.setContentDescription(isEnglish ? "Choose date" : "Elegir fecha");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             chip.setElevation(dp(1));
@@ -350,11 +384,11 @@ public class MainActivity extends Activity {
         labelGroup.setOrientation(LinearLayout.VERTICAL);
         labelGroup.setGravity(Gravity.CENTER_VERTICAL);
 
-        dateChipPrimary = textView("", 20, COLOR_INK, Typeface.BOLD);
+        dateChipPrimary = textView("", 20, ink(), Typeface.BOLD);
         dateChipPrimary.setIncludeFontPadding(false);
         labelGroup.addView(dateChipPrimary);
 
-        dateChipSecondary = textView("", 11, COLOR_MUTED, Typeface.BOLD);
+        dateChipSecondary = textView("", 11, muted(), Typeface.BOLD);
         dateChipSecondary.setIncludeFontPadding(false);
         labelGroup.addView(dateChipSecondary);
 
@@ -378,7 +412,7 @@ public class MainActivity extends Activity {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(14), dp(12), dp(14), dp(14));
         panel.setVisibility(View.GONE);
-        panel.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
+        panel.setBackground(roundedRect(card(), dp(8), chipBg(), dp(1)));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             panel.setElevation(dp(4));
         }
@@ -389,7 +423,7 @@ public class MainActivity extends Activity {
 
         monthRow.addView(calendarNavButton("<", view -> changeVisibleMonth(-1)));
 
-        calendarMonthText = textView("", 18, COLOR_INK, Typeface.BOLD);
+        calendarMonthText = textView("", 18, ink(), Typeface.BOLD);
         calendarMonthText.setGravity(Gravity.CENTER);
         monthRow.addView(calendarMonthText, new LinearLayout.LayoutParams(
                 0,
@@ -418,7 +452,7 @@ public class MainActivity extends Activity {
         weekdays.setOrientation(LinearLayout.HORIZONTAL);
         String[] labels = {"L", "M", "X", "J", "V", "S", "D"};
         for (String label : labels) {
-            TextView dayLabel = textView(label, 12, COLOR_MUTED, Typeface.BOLD);
+            TextView dayLabel = textView(label, 12, muted(), Typeface.BOLD);
             dayLabel.setGravity(Gravity.CENTER);
             weekdays.addView(dayLabel, new LinearLayout.LayoutParams(
                     0,
@@ -443,7 +477,7 @@ public class MainActivity extends Activity {
     private TextView calendarNavButton(String text, View.OnClickListener listener) {
         TextView button = textView(text, 22, COLOR_ACCENT, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
-        button.setBackground(roundedRect(Color.rgb(229, 244, 240), dp(8), Color.TRANSPARENT, 0));
+        button.setBackground(roundedRect(speakerBg(), dp(8), Color.TRANSPARENT, 0));
         button.setOnClickListener(listener);
         button.setContentDescription(text.equals("<") ? (isEnglish ? "Previous month" : "Mes anterior") : (isEnglish ? "Next month" : "Mes siguiente"));
         return button;
@@ -453,7 +487,7 @@ public class MainActivity extends Activity {
         TextView button = textView(text, 13, COLOR_ACCENT, Typeface.BOLD);
         button.setGravity(Gravity.CENTER);
         button.setPadding(dp(8), 0, dp(8), 0);
-        button.setBackground(roundedRect(Color.rgb(229, 244, 240), dp(8), Color.TRANSPARENT, 0));
+        button.setBackground(roundedRect(speakerBg(), dp(8), Color.TRANSPARENT, 0));
         button.setOnClickListener(listener);
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -512,7 +546,7 @@ public class MainActivity extends Activity {
         Calendar today = startOfDay(Calendar.getInstance());
 
         for (int cell = 0; cell < 42; cell++) {
-            TextView dayCell = textView("", 16, COLOR_INK, Typeface.BOLD);
+            TextView dayCell = textView("", 16, ink(), Typeface.BOLD);
             dayCell.setGravity(Gravity.CENTER);
             dayCell.setIncludeFontPadding(false);
 
@@ -540,7 +574,7 @@ public class MainActivity extends Activity {
                     dayCell.setBackground(roundedRect(COLOR_HOLIDAY_BG, dp(8), COLOR_HOLIDAY_BORDER, dp(1)));
                 } else if (isSameDay(cellDate, today)) {
                     dayCell.setTextColor(COLOR_WARM);
-                    dayCell.setBackground(roundedRect(Color.rgb(255, 239, 236), dp(8), Color.TRANSPARENT, 0));
+                    dayCell.setBackground(roundedRect(todayBg(), dp(8), Color.TRANSPARENT, 0));
                 } else {
                     dayCell.setBackground(roundedRect(Color.TRANSPARENT, dp(8), Color.TRANSPARENT, 0));
                 }
@@ -983,7 +1017,7 @@ public class MainActivity extends Activity {
         statusBlock = new LinearLayout(this);
         statusBlock.setOrientation(LinearLayout.VERTICAL);
         statusBlock.setPadding(dp(18), dp(16), dp(18), dp(16));
-        statusBlock.setBackground(roundedRect(COLOR_CARD, dp(8), Color.TRANSPARENT, 0));
+        statusBlock.setBackground(roundedRect(card(), dp(8), Color.TRANSPARENT, 0));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             statusBlock.setElevation(dp(1));
         }
@@ -997,7 +1031,7 @@ public class MainActivity extends Activity {
         progressParams.setMargins(0, 0, dp(12), 0);
         row.addView(progressBar, progressParams);
 
-        statusText = textView(isEnglish ? "Loading today's Word..." : "Cargando la Palabra de hoy...", 16, COLOR_INK, Typeface.NORMAL);
+        statusText = textView(isEnglish ? "Loading today's Word..." : "Cargando la Palabra de hoy...", 16, ink(), Typeface.NORMAL);
         statusText.setLineSpacing(0, 1.16f);
         row.addView(statusText, new LinearLayout.LayoutParams(
                 0,
@@ -1035,7 +1069,7 @@ public class MainActivity extends Activity {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(16), dp(14), dp(16), dp(14));
         panel.setVisibility(View.GONE);
-        panel.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(223, 229, 226), dp(1)));
+        panel.setBackground(roundedRect(card(), dp(8), stroke(), dp(1)));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             panel.setElevation(dp(8));
         }
@@ -1043,10 +1077,10 @@ public class MainActivity extends Activity {
         LinearLayout labelRow = new LinearLayout(this);
         labelRow.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView label = textView(isEnglish ? "Font size" : "Tamaño de letra", 15, COLOR_INK, Typeface.BOLD);
+        TextView label = textView(isEnglish ? "Font size" : "Tamaño de letra", 15, ink(), Typeface.BOLD);
         labelRow.addView(label, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        fontValueText = textView(Math.round(readingFontSp) + " sp", 14, COLOR_MUTED, Typeface.BOLD);
+        fontValueText = textView(Math.round(readingFontSp) + " sp", 14, muted(), Typeface.BOLD);
         labelRow.addView(fontValueText);
         panel.addView(labelRow);
 
@@ -1380,7 +1414,7 @@ public class MainActivity extends Activity {
         button.setTextColor(COLOR_ACCENT);
         button.setTextSize(14);
         button.setAllCaps(false);
-        button.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
+        button.setBackground(roundedRect(card(), dp(8), stroke(), dp(1)));
         return button;
     }
 
@@ -1674,7 +1708,7 @@ public class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView titleText = textView(title, titleSizeSp, COLOR_INK, Typeface.BOLD);
+        TextView titleText = textView(title, titleSizeSp, ink(), Typeface.BOLD);
         titleText.setIncludeFontPadding(false);
         row.addView(titleText, new LinearLayout.LayoutParams(
                 0,
@@ -1686,7 +1720,7 @@ public class MainActivity extends Activity {
         speakerButton.setImageResource(R.drawable.ic_speaker_24);
         speakerButton.setColorFilter(COLOR_ACCENT);
         speakerButton.setPadding(dp(8), dp(8), dp(8), dp(8));
-        speakerButton.setBackground(roundedRect(Color.rgb(229, 244, 240), dp(8), Color.TRANSPARENT, 0));
+        speakerButton.setBackground(roundedRect(speakerBg(), dp(8), Color.TRANSPARENT, 0));
         speakerButton.setContentDescription((isEnglish ? "Listen to " : "Escuchar ") + title);
         speakerButton.setOnClickListener(view -> startTtsConversionForText(speechText, controls));
 
@@ -1697,7 +1731,7 @@ public class MainActivity extends Activity {
     }
 
     private TtsControls createTtsControls() {
-        TextView status = textView("", 14, COLOR_MUTED, Typeface.BOLD);
+        TextView status = textView("", 14, muted(), Typeface.BOLD);
         status.setVisibility(View.GONE);
 
         LinearLayout playerPanel = new LinearLayout(this);
@@ -1738,7 +1772,7 @@ public class MainActivity extends Activity {
         seekParams.setMargins(dp(8), 0, dp(8), 0);
         playerPanel.addView(seekBar, seekParams);
 
-        TextView timeText = textView("0:00", 13, COLOR_MUTED, Typeface.BOLD);
+        TextView timeText = textView("0:00", 13, muted(), Typeface.BOLD);
         timeText.setGravity(Gravity.CENTER_VERTICAL);
         playerPanel.addView(timeText, new LinearLayout.LayoutParams(
                 dp(86),
@@ -1797,7 +1831,7 @@ public class MainActivity extends Activity {
         addTtsControlsToCard(card, ttsControls);
 
         if (!section.introduction.isEmpty()) {
-            TextView introText = textView(section.introduction, 16, COLOR_MUTED, Typeface.BOLD);
+            TextView introText = textView(section.introduction, 16, muted(), Typeface.BOLD);
             introText.setLineSpacing(0, 1.14f);
             resizableTextViews.add(introText);
             card.addView(introText);
@@ -1806,7 +1840,7 @@ public class MainActivity extends Activity {
         if (!section.reference.isEmpty()) {
             TextView referenceText = textView(section.reference, 15, COLOR_ACCENT, Typeface.BOLD);
             referenceText.setGravity(Gravity.CENTER_VERTICAL);
-            referenceText.setBackground(roundedRect(Color.rgb(229, 244, 240), dp(8), Color.TRANSPARENT, 0));
+            referenceText.setBackground(roundedRect(referenceBg(), dp(8), Color.TRANSPARENT, 0));
             referenceText.setPadding(dp(10), dp(6), dp(10), dp(6));
             LinearLayout.LayoutParams referenceParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1816,7 +1850,7 @@ public class MainActivity extends Activity {
             card.addView(referenceText, referenceParams);
         }
 
-        TextView bodyText = textView(section.body, Math.round(readingFontSp), COLOR_INK, Typeface.NORMAL);
+        TextView bodyText = textView(section.body, Math.round(readingFontSp), ink(), Typeface.NORMAL);
         bodyText.setLineSpacing(dp(4), 1.16f);
         resizableTextViews.add(bodyText);
         card.addView(bodyText);
@@ -1841,7 +1875,7 @@ public class MainActivity extends Activity {
         ));
         addTtsControlsToCard(card, ttsControls);
 
-        TextView body = textView(section.body, Math.round(readingFontSp), COLOR_INK, Typeface.NORMAL);
+        TextView body = textView(section.body, Math.round(readingFontSp), ink(), Typeface.NORMAL);
         body.setLineSpacing(dp(4), 1.16f);
         LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1858,7 +1892,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(padding, padding, padding, padding);
-        card.setBackground(roundedRect(COLOR_CARD, dp(8), Color.rgb(229, 232, 230), dp(1)));
+        card.setBackground(roundedRect(card(), dp(8), stroke(), dp(1)));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             card.setElevation(dp(1));
         }

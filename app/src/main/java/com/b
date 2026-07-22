@@ -26,13 +26,15 @@ public class SettingsActivity extends Activity {
     private static final int COLOR_INK_LIGHT = Color.rgb(25, 31, 31);
     private static final int COLOR_MUTED_LIGHT = Color.rgb(91, 99, 98);
     private static final int COLOR_STROKE_LIGHT = Color.rgb(219, 226, 222);
+    private static final int COLOR_CARD_STROKE_LIGHT = Color.rgb(229, 232, 230);
 
     // Dark mode colors
     private static final int COLOR_BG_DARK = Color.rgb(26, 28, 30);
     private static final int COLOR_CARD_DARK = Color.rgb(38, 41, 44);
     private static final int COLOR_INK_DARK = Color.rgb(224, 226, 219);
     private static final int COLOR_MUTED_DARK = Color.rgb(158, 163, 160);
-    private static final int COLOR_STROKE_DARK = Color.rgb(58, 62, 65);
+    private static final int COLOR_STROKE_DARK = Color.rgb(48, 52, 55);
+    private static final int COLOR_CARD_STROKE_DARK = Color.rgb(58, 62, 65);
 
     private static final int COLOR_ACCENT = Color.rgb(0, 107, 90);
     private static final int COLOR_WARM = Color.rgb(217, 75, 61);
@@ -46,18 +48,21 @@ public class SettingsActivity extends Activity {
     private TextView voiceButton;
     private UpdateManager.UpdateInfo latestInfo;
     private boolean isEnglish;
+    private boolean isDarkMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        isEnglish = UpdateManager.isEnglish(this);
+        isDarkMode = UpdateManager.isDarkMode(this);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(COLOR_BACKGROUND);
-            getWindow().setNavigationBarColor(COLOR_BACKGROUND);
+            getWindow().setStatusBarColor(bg());
+            getWindow().setNavigationBarColor(bg());
         }
 
         executor = Executors.newSingleThreadExecutor();
-        isEnglish = UpdateManager.isEnglish(this);
         setContentView(createScreen());
         updateInstalledVersionText();
     }
@@ -70,9 +75,16 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private int bg() { return isDarkMode ? COLOR_BG_DARK : COLOR_BG_LIGHT; }
+    private int card() { return isDarkMode ? COLOR_CARD_DARK : COLOR_CARD_LIGHT; }
+    private int ink() { return isDarkMode ? COLOR_INK_DARK : COLOR_INK_LIGHT; }
+    private int muted() { return isDarkMode ? COLOR_MUTED_DARK : COLOR_MUTED_LIGHT; }
+    private int stroke() { return isDarkMode ? COLOR_STROKE_DARK : COLOR_STROKE_LIGHT; }
+    private int cardStroke() { return isDarkMode ? COLOR_CARD_STROKE_DARK : COLOR_CARD_STROKE_LIGHT; }
+
     private View createScreen() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(COLOR_BACKGROUND);
+        root.setBackgroundColor(bg());
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -88,7 +100,7 @@ public class SettingsActivity extends Activity {
 
         content.addView(createTopBar());
 
-        TextView title = textView("Settings", 34, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Settings", 34, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -97,6 +109,7 @@ public class SettingsActivity extends Activity {
         titleParams.setMargins(0, dp(18), 0, dp(18));
         content.addView(title, titleParams);
 
+        content.addView(createDarkModeCard());
         content.addView(createLanguageCard());
         content.addView(createVoiceCard());
         content.addView(createVersionCard());
@@ -157,7 +170,7 @@ public class SettingsActivity extends Activity {
         TextView back = textView(isEnglish ? "Extras" : "Extras", 15, COLOR_ACCENT, Typeface.BOLD);
         back.setGravity(Gravity.CENTER);
         back.setPadding(dp(14), 0, dp(14), 0);
-        back.setBackground(roundedRect(Color.WHITE, dp(8), Color.rgb(219, 226, 222), dp(1)));
+        back.setBackground(roundedRect(card(), dp(8), stroke(), dp(1)));
         back.setOnClickListener(view -> finish());
         topBar.addView(back, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -165,6 +178,49 @@ public class SettingsActivity extends Activity {
         ));
 
         return topBar;
+    }
+
+    private View createDarkModeCard() {
+        LinearLayout card = createCard();
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+
+        TextView title = textView(isEnglish ? "Dark Mode" : "Modo oscuro", 20, ink(), Typeface.BOLD);
+        title.setIncludeFontPadding(false);
+        copy.addView(title);
+
+        TextView subtitle = textView(
+                isEnglish ? "Use dark colors for the interface" : "Usar colores oscuros para la interfaz",
+                14, muted(), Typeface.NORMAL);
+        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        subtitleParams.setMargins(0, dp(6), 0, 0);
+        copy.addView(subtitle, subtitleParams);
+
+        card.addView(copy, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+
+        final Switch darkToggle = new Switch(this);
+        darkToggle.setChecked(isDarkMode);
+        darkToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            UpdateManager.setDarkMode(this, isChecked);
+            isDarkMode = isChecked;
+            recreate();
+        });
+        card.addView(darkToggle, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        return card;
     }
 
     private View createLanguageCard() {
@@ -175,11 +231,11 @@ public class SettingsActivity extends Activity {
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Language", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Language", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         copy.addView(title);
 
-        TextView subtitle = textView("Select the language for daily readings", 14, COLOR_MUTED, Typeface.NORMAL);
+        TextView subtitle = textView("Select the language for daily readings", 14, muted(), Typeface.NORMAL);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -212,11 +268,11 @@ public class SettingsActivity extends Activity {
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Voice", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Voice", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         copy.addView(title);
 
-        voiceSubtitleText = textView("", 14, COLOR_MUTED, Typeface.NORMAL);
+        voiceSubtitleText = textView("", 14, muted(), Typeface.NORMAL);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -246,11 +302,11 @@ public class SettingsActivity extends Activity {
         LinearLayout card = createCard();
         card.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Version", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Version", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         card.addView(title);
 
-        installedVersionText = textView("", 15, COLOR_MUTED, Typeface.BOLD);
+        installedVersionText = textView("", 15, muted(), Typeface.BOLD);
         LinearLayout.LayoutParams installedParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -258,7 +314,7 @@ public class SettingsActivity extends Activity {
         installedParams.setMargins(0, dp(10), 0, 0);
         card.addView(installedVersionText, installedParams);
 
-        statusText = textView("Ready to check for updates.", 15, COLOR_MUTED, Typeface.NORMAL);
+        statusText = textView("Ready to check for updates.", 15, muted(), Typeface.NORMAL);
         statusText.setLineSpacing(dp(3), 1.1f);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -374,7 +430,7 @@ public class SettingsActivity extends Activity {
     private LinearLayout createCard() {
         LinearLayout card = new LinearLayout(this);
         card.setPadding(dp(18), dp(16), dp(18), dp(16));
-        card.setBackground(roundedRect(COLOR_CARD, dp(8), Color.rgb(229, 232, 230), dp(1)));
+        card.setBackground(roundedRect(card(), dp(8), cardStroke(), dp(1)));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             card.setElevation(dp(1));
         }

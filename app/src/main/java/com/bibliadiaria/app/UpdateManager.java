@@ -24,6 +24,7 @@ final class UpdateManager {
     static final String PREFS_NAME = "preferencias_lectura";
     static final String KEY_AUTO_UPDATES = "auto_updates_enabled";
     static final String KEY_IS_ENGLISH = "is_english";
+    static final String KEY_DARK_MODE = "dark_mode";
     static final String KEY_TTS_VOICE_ENGLISH = "tts_voice_english";
     static final String KEY_TTS_VOICE_SPANISH = "tts_voice_spanish";
     static final String DEFAULT_TTS_VOICE_ENGLISH = "af_heart";
@@ -87,6 +88,14 @@ final class UpdateManager {
 
     static void setEnglish(Context context, boolean enabled) {
         preferences(context).edit().putBoolean(KEY_IS_ENGLISH, enabled).apply();
+    }
+
+    static boolean isDarkMode(Context context) {
+        return preferences(context).getBoolean(KEY_DARK_MODE, false);
+    }
+
+    static void setDarkMode(Context context, boolean enabled) {
+        preferences(context).edit().putBoolean(KEY_DARK_MODE, enabled).apply();
     }
 
     static VoiceOption[] getTtsVoiceOptions(boolean isEnglish) {
@@ -207,10 +216,10 @@ final class UpdateManager {
 
         boolean english = isEnglish(activity);
         new AlertDialog.Builder(activity)
-                .setTitle(english ? "Update available" : "Actualización disponible")
-                .setMessage((english ? "Version " : "Versión ") + version + (english ? " is ready to download." : " está lista para descargar."))
+                .setTitle(english ? "Update available" : "ActualizaciÃ³n disponible")
+                .setMessage((english ? "Version " : "VersiÃ³n ") + version + (english ? " is ready to download." : " estÃ¡ lista para descargar."))
                 .setPositiveButton(english ? "Download" : "Descargar", (dialog, which) -> openDownload(activity, info.apkUrl))
-                .setNegativeButton(english ? "Later" : "Después", null)
+                .setNegativeButton(english ? "Later" : "DespuÃ©s", null)
                 .show();
     }
 
