@@ -37,6 +37,7 @@ public class SettingsActivity extends Activity {
     private static final int COLOR_ACCENT = Color.rgb(0, 107, 90);
     private static final int COLOR_WARM = Color.rgb(217, 75, 61);
 
+    private boolean isDarkMode;
     private ExecutorService executor;
     private TextView statusText;
     private TextView installedVersionText;
@@ -52,12 +53,13 @@ public class SettingsActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(COLOR_BACKGROUND);
-            getWindow().setNavigationBarColor(COLOR_BACKGROUND);
+            getWindow().setStatusBarColor(bg());
+            getWindow().setNavigationBarColor(bg());
         }
 
         executor = Executors.newSingleThreadExecutor();
         isEnglish = UpdateManager.isEnglish(this);
+        isDarkMode = UpdateManager.isDarkMode(this);
         setContentView(createScreen());
         updateInstalledVersionText();
     }
@@ -72,7 +74,7 @@ public class SettingsActivity extends Activity {
 
     private View createScreen() {
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(COLOR_BACKGROUND);
+        root.setBackgroundColor(bg());
 
         ScrollView scrollView = new ScrollView(this);
         scrollView.setFillViewport(true);
@@ -88,7 +90,7 @@ public class SettingsActivity extends Activity {
 
         content.addView(createTopBar());
 
-        TextView title = textView("Settings", 34, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Settings", 34, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -175,11 +177,11 @@ public class SettingsActivity extends Activity {
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Language", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Language", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         copy.addView(title);
 
-        TextView subtitle = textView("Select the language for daily readings", 14, COLOR_MUTED, Typeface.NORMAL);
+        TextView subtitle = textView("Select the language for daily readings", 14, muted(), Typeface.NORMAL);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -212,11 +214,11 @@ public class SettingsActivity extends Activity {
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Voice", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Voice", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         copy.addView(title);
 
-        voiceSubtitleText = textView("", 14, COLOR_MUTED, Typeface.NORMAL);
+        voiceSubtitleText = textView("", 14, muted(), Typeface.NORMAL);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -246,11 +248,11 @@ public class SettingsActivity extends Activity {
         LinearLayout card = createCard();
         card.setOrientation(LinearLayout.VERTICAL);
 
-        TextView title = textView("Version", 20, COLOR_INK, Typeface.BOLD);
+        TextView title = textView("Version", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
         card.addView(title);
 
-        installedVersionText = textView("", 15, COLOR_MUTED, Typeface.BOLD);
+        installedVersionText = textView("", 15, muted(), Typeface.BOLD);
         LinearLayout.LayoutParams installedParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -258,7 +260,7 @@ public class SettingsActivity extends Activity {
         installedParams.setMargins(0, dp(10), 0, 0);
         card.addView(installedVersionText, installedParams);
 
-        statusText = textView("Ready to check for updates.", 15, COLOR_MUTED, Typeface.NORMAL);
+        statusText = textView("Ready to check for updates.", 15, muted(), Typeface.NORMAL);
         statusText.setLineSpacing(dp(3), 1.1f);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -374,7 +376,7 @@ public class SettingsActivity extends Activity {
     private LinearLayout createCard() {
         LinearLayout card = new LinearLayout(this);
         card.setPadding(dp(18), dp(16), dp(18), dp(16));
-        card.setBackground(roundedRect(COLOR_CARD, dp(8), Color.rgb(229, 232, 230), dp(1)));
+        card.setBackground(roundedRect(card(), dp(8), Color.rgb(229, 232, 230), dp(1)));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             card.setElevation(dp(1));
         }
@@ -415,6 +417,12 @@ public class SettingsActivity extends Activity {
         }
         return drawable;
     }
+
+    // --- Dark mode aware color helpers ---
+    private int bg() { return isDarkMode ? COLOR_BG_DARK : COLOR_BG_LIGHT; }
+    private int card() { return isDarkMode ? COLOR_CARD_DARK : COLOR_CARD_LIGHT; }
+    private int ink() { return isDarkMode ? COLOR_INK_DARK : COLOR_INK_LIGHT; }
+    private int muted() { return isDarkMode ? COLOR_MUTED_DARK : COLOR_MUTED_LIGHT; }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
