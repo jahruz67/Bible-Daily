@@ -29,12 +29,19 @@ final class UpdateManager {
     static final String KEY_TTS_VOICE_SPANISH = "tts_voice_spanish";
     static final String DEFAULT_TTS_VOICE_ENGLISH = "af_heart";
     static final String DEFAULT_TTS_VOICE_SPANISH = "ef_dora";
+    static final String DEFAULT_TTS_VOICE_ENGLISH_MISTRAL = "v2/en_us-florence";
+    static final String DEFAULT_TTS_VOICE_SPANISH_MISTRAL = "v2/es_es-carlota";
+    static final String KEY_TTS_PROVIDER = "tts_provider";
+    static final String KEY_MISTRAL_API_KEY = "mistral_api_key";
+    static final String TTS_PROVIDER_GLEEZE = "gleeze";
+    static final String TTS_PROVIDER_MISTRAL = "mistral";
+    static final String MISTRAL_TTS_URL = "https://api.mistral.ai/v1/text-to-speech";
     static final String LATEST_JSON_URL =
             "https://github.com/jahruz67/Bible-Daily/releases/download/latest/latest.json";
     static final String APK_URL =
             "https://github.com/jahruz67/Bible-Daily/releases/download/latest/app-debug.apk";
 
-    private static final VoiceOption[] ENGLISH_VOICES = {
+    private static final VoiceOption[] ENGLISH_VOICES_GLEEZE = {
             new VoiceOption("af_heart", "Heart (US female)"),
             new VoiceOption("af_alloy", "Alloy (US female)"),
             new VoiceOption("af_aoede", "Aoede (US female)"),
@@ -65,10 +72,25 @@ final class UpdateManager {
             new VoiceOption("bm_lewis", "Lewis (UK male)")
     };
 
-    private static final VoiceOption[] SPANISH_VOICES = {
+    private static final VoiceOption[] ENGLISH_VOICES_MISTRAL = {
+            new VoiceOption("v2/en_us-florence", "Florence (US female)"),
+            new VoiceOption("v2/en_us-dave", "Dave (US male)"),
+            new VoiceOption("v2/en_us-libby", "Libby (US female)"),
+            new VoiceOption("v2/en_us-matt", "Matt (US male)"),
+            new VoiceOption("v2/en_us-serena", "Serena (US female)"),
+            new VoiceOption("v2/en_us-andrew", "Andrew (US male)")
+    };
+
+    private static final VoiceOption[] SPANISH_VOICES_GLEEZE = {
             new VoiceOption("ef_dora", "Dora (Spanish female)"),
             new VoiceOption("em_alex", "Alex (Spanish male)"),
             new VoiceOption("em_santa", "Santa (Spanish male)")
+    };
+
+    private static final VoiceOption[] SPANISH_VOICES_MISTRAL = {
+            new VoiceOption("v2/es_es-alvaro", "Alvaro (Spanish male)"),
+            new VoiceOption("v2/es_es-carlota", "Carlota (Spanish female)"),
+            new VoiceOption("v2/es_es-gerardo", "Gerardo (Spanish male)")
     };
 
     private UpdateManager() {
@@ -98,35 +120,76 @@ final class UpdateManager {
         preferences(context).edit().putBoolean(KEY_DARK_MODE, enabled).apply();
     }
 
-    static VoiceOption[] getTtsVoiceOptions(boolean isEnglish) {
-        return isEnglish ? ENGLISH_VOICES : SPANISH_VOICES;
+    static VoiceOption[] getTtsVoiceOptions(boolean isEnglish, String provider) {
+        if (provider == null || provider.equals(TTS_PROVIDER_GLEEZE)) {
+            return isEnglish ? ENGLISH_VOICES_GLEEZE : SPANISH_VOICES_GLEEZE;
+        } else {
+            return isEnglish ? ENGLISH_VOICES_MISTRAL : SPANISH_VOICES_MISTRAL;
+        }
     }
 
-    static String getTtsVoice(Context context, boolean isEnglish) {
-        String defaultVoice = getDefaultTtsVoice(isEnglish);
-        String voice = preferences(context).getString(getTtsVoiceKey(isEnglish), defaultVoice);
-        if (isValidTtsVoice(isEnglish, voice)) {
+    static VoiceOption[] getTtsVoiceOptions(boolean isEnglish) {
+        return getTtsVoiceOptions(isEnglish, TTS_PROVIDER_GLEEZE);
+    }
+
+    static String getTtsVoice(Context context, boolean isEnglish, String provider) {
+        String defaultVoice = getDefaultTtsVoice(isEnglish, provider);
+        String voice = preferences(context).getString(getTtsVoiceKey(isEnglish, provider), defaultVoice);
+        if (isValidTtsVoice(isEnglish, provider, voice)) {
             return voice;
         }
         return defaultVoice;
     }
 
-    static void setTtsVoice(Context context, boolean isEnglish, String voiceId) {
-        String voice = isValidTtsVoice(isEnglish, voiceId) ? voiceId : getDefaultTtsVoice(isEnglish);
-        preferences(context).edit().putString(getTtsVoiceKey(isEnglish), voice).apply();
+    static String getTtsVoice(Context context, boolean isEnglish) {
+        return getTtsVoice(context, isEnglish, TTS_PROVIDER_GLEEZE);
     }
 
-    static String getTtsVoiceLabel(boolean isEnglish, String voiceId) {
-        for (VoiceOption option : getTtsVoiceOptions(isEnglish)) {
+    static void setTtsVoice(Context context, boolean isEnglish, String provider, String voiceId) {
+        String voice = isValidTtsVoice(isEnglish, provider, voiceId) ? voiceId : getDefaultTtsVoice(isEnglish, provider);
+        preferences(context).edit().putString(getTtsVoiceKey(isEnglish, provider), voice).apply();
+    }
+
+    static void setTtsVoice(Context context, boolean isEnglish, String voiceId) {
+        setTtsVoice(context, isEnglish, TTS_PROVIDER_GLEEZE, voiceId);
+    }
+
+    static String getTtsProvider(Context context) {
+        return preferences(context).getString(KEY_TTS_PROVIDER, TTS_PROVIDER_GLEEZE);
+    }
+
+    static void setTtsProvider(Context context, String provider) {
+        preferences(context).edit().putString(KEY_TTS_PROVIDER, provider).apply();
+    }
+
+    static String getMistralApiKey(Context context) {
+        return preferences(context).getString(KEY_MISTRAL_API_KEY, "");
+    }
+
+    static void setMistralApiKey(Context context, String apiKey) {
+        preferences(context).edit().putString(KEY_MISTRAL_API_KEY, apiKey).apply();
+    }
+
+    static boolean isMistralConfigured(Context context) {
+        String apiKey = getMistralApiKey(context);
+        return apiKey != null && !apiKey.trim().isEmpty();
+    }
+
+    static String getTtsVoiceLabel(boolean isEnglish, String provider, String voiceId) {
+        for (VoiceOption option : getTtsVoiceOptions(isEnglish, provider)) {
             if (option.id.equals(voiceId)) {
                 return option.label;
             }
         }
-        return getTtsVoiceLabel(isEnglish, getDefaultTtsVoice(isEnglish));
+        return getTtsVoiceLabel(isEnglish, provider, getDefaultTtsVoice(isEnglish));
     }
 
-    static int getTtsVoiceIndex(boolean isEnglish, String voiceId) {
-        VoiceOption[] options = getTtsVoiceOptions(isEnglish);
+    static String getTtsVoiceLabel(boolean isEnglish, String voiceId) {
+        return getTtsVoiceLabel(isEnglish, TTS_PROVIDER_GLEEZE, voiceId);
+    }
+
+    static int getTtsVoiceIndex(boolean isEnglish, String provider, String voiceId) {
+        VoiceOption[] options = getTtsVoiceOptions(isEnglish, provider);
         for (int index = 0; index < options.length; index++) {
             if (options[index].id.equals(voiceId)) {
                 return index;
@@ -135,24 +198,48 @@ final class UpdateManager {
         return 0;
     }
 
+    static int getTtsVoiceIndex(boolean isEnglish, String voiceId) {
+        return getTtsVoiceIndex(isEnglish, TTS_PROVIDER_GLEEZE, voiceId);
+    }
+
+    private static String getDefaultTtsVoice(boolean isEnglish, String provider) {
+        if (provider == null || provider.equals(TTS_PROVIDER_GLEEZE)) {
+            return isEnglish ? DEFAULT_TTS_VOICE_ENGLISH : DEFAULT_TTS_VOICE_SPANISH;
+        } else {
+            return isEnglish ? DEFAULT_TTS_VOICE_ENGLISH_MISTRAL : DEFAULT_TTS_VOICE_SPANISH_MISTRAL;
+        }
+    }
+
     private static String getDefaultTtsVoice(boolean isEnglish) {
-        return isEnglish ? DEFAULT_TTS_VOICE_ENGLISH : DEFAULT_TTS_VOICE_SPANISH;
+        return getDefaultTtsVoice(isEnglish, TTS_PROVIDER_GLEEZE);
+    }
+
+    private static String getTtsVoiceKey(boolean isEnglish, String provider) {
+        if (provider == null || provider.equals(TTS_PROVIDER_GLEEZE)) {
+            return isEnglish ? KEY_TTS_VOICE_ENGLISH : KEY_TTS_VOICE_SPANISH;
+        } else {
+            return isEnglish ? KEY_TTS_VOICE_ENGLISH + "_mistral" : KEY_TTS_VOICE_SPANISH + "_mistral";
+        }
     }
 
     private static String getTtsVoiceKey(boolean isEnglish) {
-        return isEnglish ? KEY_TTS_VOICE_ENGLISH : KEY_TTS_VOICE_SPANISH;
+        return getTtsVoiceKey(isEnglish, TTS_PROVIDER_GLEEZE);
     }
 
-    private static boolean isValidTtsVoice(boolean isEnglish, String voiceId) {
+    private static boolean isValidTtsVoice(boolean isEnglish, String provider, String voiceId) {
         if (voiceId == null) {
             return false;
         }
-        for (VoiceOption option : getTtsVoiceOptions(isEnglish)) {
+        for (VoiceOption option : getTtsVoiceOptions(isEnglish, provider)) {
             if (option.id.equals(voiceId)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static boolean isValidTtsVoice(boolean isEnglish, String voiceId) {
+        return isValidTtsVoice(isEnglish, TTS_PROVIDER_GLEEZE, voiceId);
     }
 
     static UpdateInfo fetchLatestUpdate(Context context) throws Exception {

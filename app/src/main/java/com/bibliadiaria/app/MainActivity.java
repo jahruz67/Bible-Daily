@@ -86,8 +86,9 @@ public class MainActivity extends Activity {
     private static final int RANK_FEAST = 2;
     private static final int RANK_SOLEMNITY = 3;
 
-    private static final String TTS_SPEECH_URL = "https://ttsapi.host2.gleeze.com/v1/audio/speech";
-    private static final String TTS_MODEL = "kokoro";
+    private static final String TTS_SPEECH_URL_GLEEZE = "https://ttsapi.host2.gleeze.com/v1/audio/speech";
+    private static final String TTS_MODEL_GLEEZE = "kokoro";
+    private static final String TTS_SPEECH_URL_MISTRAL = "https://api.mistral.ai/v1/text-to-speech";
     private static final String READING_CACHE_DIR = "reading-cache";
     private static final String PREFETCH_MONTH_PREFIX = "prefetch_month_";
     private static final int NEXT_MONTH_PREFETCH_DAY = 26;
@@ -1490,7 +1491,16 @@ public class MainActivity extends Activity {
     }
 
     private File downloadTtsAudio(String text) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(TTS_SPEECH_URL).openConnection();
+        String provider = UpdateManager.getTtsProvider(this);
+        if (provider.equals(UpdateManager.TTS_PROVIDER_MISTRAL)) {
+            return downloadMistralTtsAudio(text);
+        } else {
+            return downloadGleezTtsAudio(text);
+        }
+    }
+
+    private File downloadGleezTtsAudio(String text) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(TTS_SPEECH_URL_GLEEZE).openConnection();
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(120000);
         connection.setRequestMethod("POST");
@@ -1500,8 +1510,8 @@ public class MainActivity extends Activity {
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
 
         JSONObject body = new JSONObject();
-        body.put("model", TTS_MODEL);
-        body.put("voice", UpdateManager.getTtsVoice(this, isEnglish));
+        body.put("model", TTS_MODEL_GLEEZE);
+        body.put("voice", UpdateManager.getTtsVoice(this, isEnglish, UpdateManager.TTS_PROVIDER_GLEEZE));
         body.put("input", text);
         body.put("response_format", "mp3");
         body.put("speed", 1.0);
@@ -1521,6 +1531,59 @@ public class MainActivity extends Activity {
             }
             connection.disconnect();
             throw new IOException((isEnglish ? "TTS API responded with code " : "La API TTS respondio con codigo ")
+                    + responseCode
+                    + (details.isEmpty() ? "." : ". " + details));
+        }
+
+        File outputFile = File.createTempFile("daily-reading-tts-", ".mp3", getCacheDir());
+        try (InputStream input = connection.getInputStream();
+             FileOutputStream output = new FileOutputStream(outputFile)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+        } finally {
+            connection.disconnect();
+        }
+        return outputFile;
+    }
+
+    private File downloadMistralTtsAudio(String text) throws Exception {
+        String apiKey = UpdateManager.getMistralApiKey(this);
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            throw new IOException(isEnglish ? "Mistral API key is not configured. Please set it in Settings." : "La clave API de Mistral no está configurada. Configúrela en Ajustes.");
+        }
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(TTS_SPEECH_URL_MISTRAL).openConnection();
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(120000);
+        connection.setRequestMethod("POST");
+        connection.setDoOutput(true);
+        connection.setRequestProperty("User-Agent", "BibliaDiaria/1.0 Android");
+        connection.setRequestProperty("Accept", "audio/mpeg");
+        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+
+        JSONObject body = new JSONObject();
+        body.put("text", text);
+        body.put("voice", UpdateManager.getTtsVoice(this, isEnglish, UpdateManager.TTS_PROVIDER_MISTRAL));
+
+        byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+        connection.setFixedLengthStreamingMode(payload.length);
+        try (OutputStream stream = connection.getOutputStream()) {
+            stream.write(payload);
+        }
+
+        int responseCode = connection.getResponseCode();
+        if (responseCode < 200 || responseCode >= 300) {
+            String details = "";
+            InputStream errorStream = connection.getErrorStream();
+            if (errorStream != null) {
+                details = readStream(errorStream);
+            }
+            connection.disconnect();
+            throw new IOException((isEnglish ? "Mistral TTS API responded with code " : "La API TTS de Mistral respondió con código ")
                     + responseCode
                     + (details.isEmpty() ? "." : ". " + details));
         }
