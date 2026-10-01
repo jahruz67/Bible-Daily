@@ -6,11 +6,10 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.text.Html;
 import android.text.Spanned;
 import android.view.Gravity;
@@ -86,9 +85,6 @@ public class MainActivity extends Activity {
     private static final int RANK_FEAST = 2;
     private static final int RANK_SOLEMNITY = 3;
 
-    private static final String TTS_SPEECH_URL_GLEEZE = "https://ttsapi.host2.gleeze.com/v1/audio/speech";
-    private static final String TTS_MODEL_GLEEZE = "kokoro";
-    private static final String TTS_SPEECH_URL_MISTRAL = "https://api.mistral.ai/v1/text-to-speech";
     private static final String READING_CACHE_DIR = "reading-cache";
     private static final String PREFETCH_MONTH_PREFIX = "prefetch_month_";
     private static final int NEXT_MONTH_PREFETCH_DAY = 26;
@@ -96,17 +92,6 @@ public class MainActivity extends Activity {
 
     private final Locale spanishLocale = new Locale("es", "ES");
     private final List<TextView> resizableTextViews = new ArrayList<>();
-    private final Handler ttsProgressHandler = new Handler(Looper.getMainLooper());
-    private final Runnable ttsProgressTick = new Runnable() {
-        @Override
-        public void run() {
-            updateTtsProgress();
-            if (ttsPlayer != null && ttsPlayer.isPlaying()) {
-                ttsProgressHandler.postDelayed(this, 500);
-            }
-        }
-    };
-
     private ExecutorService executor;
     private ExecutorService prefetchExecutor;
     private SharedPreferences preferences;
@@ -126,14 +111,14 @@ public class MainActivity extends Activity {
     private Button retryButton;
     private LinearLayout fontPanel;
     private TextView fontValueText;
-    private LinearLayout ttsPlayerPanel;
+    private LinearLayout ttsControlPanel;
     private TextView ttsStatusText;
-    private Button ttsPlayButton;
-    private SeekBar ttsSeekBar;
-    private TextView ttsTimeText;
-    private MediaPlayer ttsPlayer;
-    private File ttsAudioFile;
-    private String currentTtsText = "";
+    private TextToSpeech textToSpeech;
+    private boolean ttsReady;
+    private boolean ttsInitializing;
+    private String pendingTtsText = "";
+    private int pendingTtsGeneration = -1;
+    private String finalTtsUtteranceId = "";
     private Calendar selectedDateCalendar;
     private Calendar visibleMonthCalendar;
     private int loadGeneration;
@@ -166,6 +151,12 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStop() {
+        super.onStop();
+        stopAndroidTts();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         loadGeneration++;
@@ -176,9 +167,7 @@ public class MainActivity extends Activity {
         if (prefetchExecutor != null) {
             prefetchExecutor.shutdownNow();
         }
-        ttsProgressHandler.removeCallbacks(ttsProgressTick);
-        releaseTtsPlayer();
-        deleteTtsAudioFile();
+        stopAndShutdownTts();
     }
 
     @Override
@@ -1421,8 +1410,7 @@ public class MainActivity extends Activity {
 
     private void startTtsConversionForText(String text, TtsControls controls) {
         activateTtsControls(controls);
-        currentTtsText = text == null ? "" : text;
-        startTtsConversion();
+        startAndroidTts(text == null ? "" : text.trim());
     }
 
     private void activateTtsControls(TtsControls controls) {
@@ -1430,265 +1418,214 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if (ttsPlayerPanel != null && ttsPlayerPanel != controls.playerPanel) {
-            ttsPlayerPanel.setVisibility(View.GONE);
+        if (ttsControlPanel != null && ttsControlPanel != controls.controlPanel) {
+            ttsControlPanel.setVisibility(View.GONE);
         }
         if (ttsStatusText != null && ttsStatusText != controls.statusText) {
             ttsStatusText.setText("");
             ttsStatusText.setVisibility(View.GONE);
         }
-        if (ttsPlayButton != null && ttsPlayButton != controls.playButton) {
-            ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
-        }
-        if (ttsSeekBar != null && ttsSeekBar != controls.seekBar) {
-            ttsSeekBar.setProgress(0);
-            ttsSeekBar.setMax(0);
-        }
-        if (ttsTimeText != null && ttsTimeText != controls.timeText) {
-            ttsTimeText.setText("0:00");
-        }
-
         ttsStatusText = controls.statusText;
-        ttsPlayerPanel = controls.playerPanel;
-        ttsPlayButton = controls.playButton;
-        ttsSeekBar = controls.seekBar;
-        ttsTimeText = controls.timeText;
+        ttsControlPanel = controls.controlPanel;
     }
 
-    private void startTtsConversion() {
-        String text = currentTtsText == null ? "" : currentTtsText.trim();
+    private void startAndroidTts(String text) {
         if (text.isEmpty()) {
             return;
         }
 
         int generation = ++ttsGeneration;
-        stopTtsProgressUpdates();
-        releaseTtsPlayer();
-        deleteTtsAudioFile();
-        setTtsStatus(isEnglish ? "Creating audio..." : "Generando audio...");
-        if (ttsPlayerPanel != null) {
-            ttsPlayerPanel.setVisibility(View.GONE);
+        pendingTtsText = text;
+        pendingTtsGeneration = generation;
+        finalTtsUtteranceId = "";
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+        }
+        setTtsStatus(isEnglish ? "Starting Android text-to-speech..." : "Iniciando texto a voz de Android...");
+        if (ttsControlPanel != null) {
+            ttsControlPanel.setVisibility(View.VISIBLE);
         }
 
-        executor.submit(() -> {
-            try {
-                File audioFile = downloadTtsAudio(text);
-                runOnUiThread(() -> {
-                    if (generation == ttsGeneration) {
-                        showTtsAudioReady(audioFile);
-                    } else if (audioFile.exists()) {
-                        audioFile.delete();
-                    }
-                });
-            } catch (Exception error) {
-                runOnUiThread(() -> {
-                    if (generation == ttsGeneration) {
-                        showTtsError(error);
-                    }
-                });
+        if (ttsReady) {
+            speakWithAndroidTts(text, generation);
+        } else {
+            initializeAndroidTts();
+        }
+    }
+
+    private void initializeAndroidTts() {
+        if (ttsInitializing) {
+            return;
+        }
+        if (textToSpeech != null) {
+            textToSpeech.shutdown();
+            textToSpeech = null;
+        }
+        ttsInitializing = true;
+        textToSpeech = new TextToSpeech(getApplicationContext(), status -> {
+            ttsInitializing = false;
+            if (status != TextToSpeech.SUCCESS || textToSpeech == null) {
+                showTtsError(isEnglish
+                        ? "Android text-to-speech is unavailable on this device."
+                        : "El texto a voz de Android no está disponible en este dispositivo.");
+                return;
+            }
+
+            if (!applyTtsLanguage()) {
+                return;
+            }
+
+            textToSpeech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override
+                public void onStart(String utteranceId) {
+                    runOnUiThread(() -> {
+                        if (utteranceId != null && utteranceId.startsWith("reading-" + ttsGeneration + "-")) {
+                            setTtsStatus(isEnglish ? "Speaking with Android..." : "Leyendo con Android...");
+                        }
+                    });
+                }
+
+                @Override
+                public void onDone(String utteranceId) {
+                    runOnUiThread(() -> {
+                        if (utteranceId != null && utteranceId.equals(finalTtsUtteranceId)) {
+                            finishAndroidTts(false);
+                        }
+                    });
+                }
+
+                @Override
+                public void onError(String utteranceId) {
+                    runOnUiThread(() -> {
+                        if (utteranceId != null && utteranceId.startsWith("reading-" + ttsGeneration + "-")) {
+                            showTtsError(isEnglish
+                                    ? "Android could not read this text."
+                                    : "Android no pudo leer este texto.");
+                        }
+                    });
+                }
+            });
+            ttsReady = true;
+            if (!pendingTtsText.isEmpty() && pendingTtsGeneration == ttsGeneration) {
+                speakWithAndroidTts(pendingTtsText, pendingTtsGeneration);
             }
         });
     }
 
-    private File downloadTtsAudio(String text) throws Exception {
-        String provider = UpdateManager.getTtsProvider(this);
-        if (provider.equals(UpdateManager.TTS_PROVIDER_MISTRAL)) {
-            return downloadMistralTtsAudio(text);
-        } else {
-            return downloadGleezTtsAudio(text);
+    private boolean applyTtsLanguage() {
+        if (textToSpeech == null) {
+            return false;
         }
+        Locale targetLocale = isEnglish ? Locale.ENGLISH : spanishLocale;
+        int languageResult = textToSpeech.setLanguage(targetLocale);
+        if (languageResult == TextToSpeech.LANG_MISSING_DATA
+                || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+            // Fallback for Spanish if specific country locale is unsupported
+            if (!isEnglish) {
+                languageResult = textToSpeech.setLanguage(new Locale("es"));
+            }
+        }
+        if (languageResult == TextToSpeech.LANG_MISSING_DATA
+                || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+            showTtsError(isEnglish
+                    ? "The English Android speech voice is not installed."
+                    : "La voz en español de Android no está instalada.");
+            return false;
+        }
+        return true;
     }
 
-    private File downloadGleezTtsAudio(String text) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(TTS_SPEECH_URL_GLEEZE).openConnection();
-        connection.setConnectTimeout(15000);
-        connection.setReadTimeout(120000);
-        connection.setRequestMethod("POST");
-        connection.setDoOutput(true);
-        connection.setRequestProperty("User-Agent", "BibliaDiaria/1.0 Android");
-        connection.setRequestProperty("Accept", "audio/mpeg");
-        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-
-        JSONObject body = new JSONObject();
-        body.put("model", TTS_MODEL_GLEEZE);
-        body.put("voice", UpdateManager.getTtsVoice(this, isEnglish, UpdateManager.TTS_PROVIDER_GLEEZE));
-        body.put("input", text);
-        body.put("response_format", "mp3");
-        body.put("speed", 1.0);
-
-        byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
-        connection.setFixedLengthStreamingMode(payload.length);
-        try (OutputStream stream = connection.getOutputStream()) {
-            stream.write(payload);
+    private void speakWithAndroidTts(String text, int generation) {
+        if (textToSpeech == null) {
+            showTtsError(isEnglish ? "There is no text to read." : "No hay texto para leer.");
+            return;
+        }
+        if (!applyTtsLanguage()) {
+            return;
+        }
+        List<String> chunks = splitSpeechText(text, TextToSpeech.getMaxSpeechInputLength());
+        if (chunks.isEmpty()) {
+            showTtsError(isEnglish ? "There is no text to read." : "No hay texto para leer.");
+            return;
         }
 
-        int responseCode = connection.getResponseCode();
-        if (responseCode < 200 || responseCode >= 300) {
-            String details = "";
-            InputStream errorStream = connection.getErrorStream();
-            if (errorStream != null) {
-                details = readStream(errorStream);
+        for (int index = 0; index < chunks.size(); index++) {
+            boolean last = index == chunks.size() - 1;
+            String utteranceId = "reading-" + generation + "-" + (last ? "last" : index);
+            if (last) {
+                finalTtsUtteranceId = utteranceId;
             }
-            connection.disconnect();
-            throw new IOException((isEnglish ? "TTS API responded with code " : "La API TTS respondio con codigo ")
-                    + responseCode
-                    + (details.isEmpty() ? "." : ". " + details));
-        }
-
-        File outputFile = File.createTempFile("daily-reading-tts-", ".mp3", getCacheDir());
-        try (InputStream input = connection.getInputStream();
-             FileOutputStream output = new FileOutputStream(outputFile)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                output.write(buffer, 0, read);
+            int result = textToSpeech.speak(
+                    chunks.get(index),
+                    index == 0 ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD,
+                    null,
+                    utteranceId
+            );
+            if (result == TextToSpeech.ERROR) {
+                showTtsError(isEnglish
+                        ? "Android could not start text-to-speech."
+                        : "Android no pudo iniciar el texto a voz.");
+                return;
             }
-        } finally {
-            connection.disconnect();
         }
-        return outputFile;
+        pendingTtsText = "";
+        pendingTtsGeneration = -1;
     }
 
-    private File downloadMistralTtsAudio(String text) throws Exception {
-        String apiKey = UpdateManager.getMistralApiKey(this);
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw new IOException(isEnglish ? "Mistral API key is not configured. Please set it in Settings." : "La clave API de Mistral no está configurada. Configúrela en Ajustes.");
-        }
-
-        HttpURLConnection connection = (HttpURLConnection) new URL(TTS_SPEECH_URL_MISTRAL).openConnection();
-        connection.setConnectTimeout(15000);
-        connection.setReadTimeout(120000);
-        connection.setRequestMethod("POST");
-        connection.setDoOutput(true);
-        connection.setRequestProperty("User-Agent", "BibliaDiaria/1.0 Android");
-        connection.setRequestProperty("Accept", "audio/mpeg");
-        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-        connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-
-        JSONObject body = new JSONObject();
-        body.put("text", text);
-        body.put("voice", UpdateManager.getTtsVoice(this, isEnglish, UpdateManager.TTS_PROVIDER_MISTRAL));
-
-        byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
-        connection.setFixedLengthStreamingMode(payload.length);
-        try (OutputStream stream = connection.getOutputStream()) {
-            stream.write(payload);
-        }
-
-        int responseCode = connection.getResponseCode();
-        if (responseCode < 200 || responseCode >= 300) {
-            String details = "";
-            InputStream errorStream = connection.getErrorStream();
-            if (errorStream != null) {
-                details = readStream(errorStream);
-            }
-            connection.disconnect();
-            throw new IOException((isEnglish ? "Mistral TTS API responded with code " : "La API TTS de Mistral respondió con código ")
-                    + responseCode
-                    + (details.isEmpty() ? "." : ". " + details));
-        }
-
-        File outputFile = File.createTempFile("daily-reading-tts-", ".mp3", getCacheDir());
-        try (InputStream input = connection.getInputStream();
-             FileOutputStream output = new FileOutputStream(outputFile)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                output.write(buffer, 0, read);
-            }
-        } finally {
-            connection.disconnect();
-        }
-        return outputFile;
-    }
-
-    private void showTtsAudioReady(File audioFile) {
-        try {
-            releaseTtsPlayer();
-            deleteTtsAudioFile();
-            ttsAudioFile = audioFile;
-            ttsPlayer = new MediaPlayer();
-            ttsPlayer.setDataSource(audioFile.getAbsolutePath());
-            ttsPlayer.setOnCompletionListener(player -> {
-                stopTtsProgressUpdates();
-                if (ttsPlayButton != null) {
-                    ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
+    private List<String> splitSpeechText(String text, int maximumLength) {
+        List<String> chunks = new ArrayList<>();
+        int limit = Math.max(1, maximumLength);
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(text.length(), start + limit);
+            if (end < text.length()) {
+                int breakAt = text.lastIndexOf(' ', end);
+                if (breakAt > start) {
+                    end = breakAt;
                 }
-                updateTtsProgress();
-            });
-            ttsPlayer.prepare();
-
-            if (ttsSeekBar != null) {
-                ttsSeekBar.setMax(ttsPlayer.getDuration());
-                ttsSeekBar.setProgress(0);
             }
-            updateTtsTimeText(0, ttsPlayer.getDuration());
-            if (ttsPlayerPanel != null) {
-                ttsPlayerPanel.setVisibility(View.VISIBLE);
+            String chunk = text.substring(start, end).trim();
+            if (!chunk.isEmpty()) {
+                chunks.add(chunk);
             }
-            setTtsStatus(isEnglish ? "Audio ready." : "Audio listo.");
-        } catch (Exception error) {
-            if (audioFile.exists()) {
-                audioFile.delete();
+            start = end;
+            while (start < text.length() && Character.isWhitespace(text.charAt(start))) {
+                start++;
             }
-            showTtsError(error);
         }
+        return chunks;
     }
 
-    private void showTtsError(Exception error) {
-        releaseTtsPlayer();
-        deleteTtsAudioFile();
-        if (ttsPlayerPanel != null) {
-            ttsPlayerPanel.setVisibility(View.GONE);
+    private void showTtsError(String message) {
+        if (textToSpeech != null) {
+            textToSpeech.stop();
         }
-        setTtsStatus((isEnglish ? "Could not create audio. " : "No se pudo crear el audio. ")
-                + cleanErrorMessage(error));
+        pendingTtsText = "";
+        pendingTtsGeneration = -1;
+        if (ttsControlPanel != null) {
+            ttsControlPanel.setVisibility(View.GONE);
+        }
+        setTtsStatus(message);
     }
 
-    private void toggleTtsPlayback() {
-        if (ttsPlayer == null) {
-            return;
+    private void finishAndroidTts(boolean stopped) {
+        finalTtsUtteranceId = "";
+        if (ttsControlPanel != null) {
+            ttsControlPanel.setVisibility(View.GONE);
         }
-
-        if (ttsPlayer.isPlaying()) {
-            ttsPlayer.pause();
-            stopTtsProgressUpdates();
-            if (ttsPlayButton != null) {
-                ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
-            }
-            updateTtsProgress();
-        } else {
-            ttsPlayer.start();
-            if (ttsPlayButton != null) {
-                ttsPlayButton.setText(isEnglish ? "Pause" : "Pausar");
-            }
-            ttsProgressHandler.post(ttsProgressTick);
-        }
+        setTtsStatus(stopped
+                ? (isEnglish ? "Stopped." : "Detenido.")
+                : (isEnglish ? "Finished." : "Finalizado."));
     }
 
-    private void updateTtsProgress() {
-        if (ttsPlayer == null || ttsSeekBar == null) {
-            return;
+    private void stopAndroidTts() {
+        ttsGeneration++;
+        pendingTtsText = "";
+        pendingTtsGeneration = -1;
+        if (textToSpeech != null) {
+            textToSpeech.stop();
         }
-
-        int position = ttsPlayer.getCurrentPosition();
-        int duration = ttsPlayer.getDuration();
-        ttsSeekBar.setProgress(position);
-        updateTtsTimeText(position, duration);
-    }
-
-    private void updateTtsTimeText(int positionMillis, int durationMillis) {
-        if (ttsTimeText == null) {
-            return;
-        }
-        ttsTimeText.setText(formatAudioTime(positionMillis) + " / " + formatAudioTime(durationMillis));
-    }
-
-    private String formatAudioTime(int millis) {
-        int totalSeconds = Math.max(0, millis / 1000);
-        int minutes = totalSeconds / 60;
-        int seconds = totalSeconds % 60;
-        return String.format(Locale.US, "%d:%02d", minutes, seconds);
+        finishAndroidTts(true);
     }
 
     private void setTtsStatus(String text) {
@@ -1700,45 +1637,29 @@ public class MainActivity extends Activity {
 
     private void resetTtsForNewReading() {
         ttsGeneration++;
-        currentTtsText = "";
-        stopTtsProgressUpdates();
-        releaseTtsPlayer();
-        deleteTtsAudioFile();
+        pendingTtsText = "";
+        pendingTtsGeneration = -1;
+        finalTtsUtteranceId = "";
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+        }
         if (ttsStatusText != null) {
             ttsStatusText.setText("");
             ttsStatusText.setVisibility(View.GONE);
         }
-        if (ttsPlayerPanel != null) {
-            ttsPlayerPanel.setVisibility(View.GONE);
-        }
-        if (ttsPlayButton != null) {
-            ttsPlayButton.setText(isEnglish ? "Play" : "Reproducir");
-        }
-        if (ttsSeekBar != null) {
-            ttsSeekBar.setProgress(0);
-            ttsSeekBar.setMax(0);
-        }
-        if (ttsTimeText != null) {
-            ttsTimeText.setText("0:00");
+        if (ttsControlPanel != null) {
+            ttsControlPanel.setVisibility(View.GONE);
         }
     }
 
-    private void stopTtsProgressUpdates() {
-        ttsProgressHandler.removeCallbacks(ttsProgressTick);
-    }
-
-    private void releaseTtsPlayer() {
-        if (ttsPlayer != null) {
-            ttsPlayer.release();
-            ttsPlayer = null;
+    private void stopAndShutdownTts() {
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+            textToSpeech = null;
         }
-    }
-
-    private void deleteTtsAudioFile() {
-        if (ttsAudioFile != null && ttsAudioFile.exists()) {
-            ttsAudioFile.delete();
-        }
-        ttsAudioFile = null;
+        ttsReady = false;
+        ttsInitializing = false;
     }
 
     private void addSpeechSection(List<String> parts, String title, DailySection section) {
@@ -1797,55 +1718,21 @@ public class MainActivity extends Activity {
         TextView status = textView("", 14, muted(), Typeface.BOLD);
         status.setVisibility(View.GONE);
 
-        LinearLayout playerPanel = new LinearLayout(this);
-        playerPanel.setOrientation(LinearLayout.HORIZONTAL);
-        playerPanel.setGravity(Gravity.CENTER_VERTICAL);
-        playerPanel.setVisibility(View.GONE);
+        LinearLayout controlPanel = new LinearLayout(this);
+        controlPanel.setOrientation(LinearLayout.HORIZONTAL);
+        controlPanel.setGravity(Gravity.CENTER_VERTICAL);
+        controlPanel.setVisibility(View.GONE);
 
-        Button playButton = createOutlinedButton(isEnglish ? "Play" : "Reproducir");
-        playerPanel.addView(playButton, new LinearLayout.LayoutParams(
+        Button stopButton = createOutlinedButton(isEnglish ? "Stop" : "Detener");
+        controlPanel.addView(stopButton, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 dp(42)
         ));
 
-        SeekBar seekBar = new SeekBar(this);
-        seekBar.setMax(0);
-        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser && seekBar == ttsSeekBar && ttsPlayer != null) {
-                    ttsPlayer.seekTo(progress);
-                    updateTtsTimeText(progress, ttsPlayer.getDuration());
-                }
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-        LinearLayout.LayoutParams seekParams = new LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
-        );
-        seekParams.setMargins(dp(8), 0, dp(8), 0);
-        playerPanel.addView(seekBar, seekParams);
-
-        TextView timeText = textView("0:00", 13, muted(), Typeface.BOLD);
-        timeText.setGravity(Gravity.CENTER_VERTICAL);
-        playerPanel.addView(timeText, new LinearLayout.LayoutParams(
-                dp(86),
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        TtsControls controls = new TtsControls(status, playerPanel, playButton, seekBar, timeText);
-        playButton.setOnClickListener(view -> {
+        TtsControls controls = new TtsControls(status, controlPanel, stopButton);
+        stopButton.setOnClickListener(view -> {
             activateTtsControls(controls);
-            toggleTtsPlayback();
+            stopAndroidTts();
         });
         return controls;
     }
@@ -1863,7 +1750,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         playerParams.setMargins(0, 0, 0, dp(14));
-        card.addView(controls.playerPanel, playerParams);
+        card.addView(controls.controlPanel, playerParams);
     }
 
     private void addScriptureCard(String title, String overline, DailySection section, boolean featured) {
@@ -2395,23 +2282,17 @@ public class MainActivity extends Activity {
 
     private static class TtsControls {
         final TextView statusText;
-        final LinearLayout playerPanel;
-        final Button playButton;
-        final SeekBar seekBar;
-        final TextView timeText;
+        final LinearLayout controlPanel;
+        final Button stopButton;
 
         TtsControls(
                 TextView statusText,
-                LinearLayout playerPanel,
-                Button playButton,
-                SeekBar seekBar,
-                TextView timeText
+                LinearLayout controlPanel,
+                Button stopButton
         ) {
             this.statusText = statusText;
-            this.playerPanel = playerPanel;
-            this.playButton = playButton;
-            this.seekBar = seekBar;
-            this.timeText = timeText;
+            this.controlPanel = controlPanel;
+            this.stopButton = stopButton;
         }
     }
 

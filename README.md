@@ -13,3 +13,13 @@ La pantalla principal muestra primero la Palabra de Dios, después la lectura de
 ## Abrir el proyecto
 
 Abre esta carpeta en Android Studio y sincroniza el proyecto Gradle. Este entorno no incluye Java, Gradle ni Android SDK, así que la compilación debe hacerse desde Android Studio o desde una terminal que ya tenga esas herramientas instaladas.
+
+## Sitio web
+
+La landing page estática vive en [`site/`](site/) y se publica en GitHub Pages mediante [`.github/workflows/pages.yml`](.github/workflows/pages.yml). Al hacer push a `main` con cambios en el sitio, el workflow despliega automáticamente la versión nueva.
+
+Para verla en local, sirve la carpeta `site` con cualquier servidor HTTP estático; por ejemplo:
+
+```text
+python -m http.server 8080 --directory site
+```

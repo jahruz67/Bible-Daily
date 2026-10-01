@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Biblia Diaria: la Palabra de Dios, las lecturas y las reflexiones del Papa cada día en tu Android."
+    />
+    <meta name="theme-color" content="#f5f0e7" />
+    <meta property="og:title" content="Biblia Diaria — La Palabra contigo" />
+    <meta
+      property="og:description"
+      content="Lecturas, Evangelio, audio y oraciones en una app serena y sencilla."
+    />
+    <title>Biblia Diaria — La Palabra contigo</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Saltar al contenido</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Biblia Diaria, inicio">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 36 36" role="img">
+            <path d="M8 7.5h13.5a6 6 0 0 1 6 6V29H14a6 6 0 0 1-6-6V7.5Z" />
+            <path d="M14 7.5v15.8c0 3.2 2 5.7 5 5.7M20.7 12v8.2M16.6 16.1h8.2" />
+          </svg>
+        </span>
+        <span>Biblia Diaria</span>
+      </a>
+
+      <nav class="nav-links" aria-label="Navegación principal">
+        <a href="#funciones">Funciones</a>
+        <a href="#instalar">Cómo instalar</a>
+        <a href="https://github.com/jahruz67/Bible-Daily" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+
+      <a class="button button-small button-outline header-download" href="https://github.com/jahruz67/Bible-Daily/releases/download/latest/app-debug.apk">
+        Descargar
+      </a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy reveal">
+          <div class="eyebrow"><span></span> Tu encuentro diario con la Palabra</div>
+          <h1>Un momento de paz.<br /><em>Todos los días.</em></h1>
+          <p class="hero-lede">
+            La lectura, el Evangelio y las palabras del Papa en una experiencia clara,
+            serena y hecha para acompañarte.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/jahruz67/Bible-Daily/releases/download/latest/app-debug.apk">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" /></svg>
+              Descargar para Android
+            </a>
+            <a class="text-link" href="#funciones">Conocer la app <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="release-note" aria-live="polite">
+            <span class="status-dot"></span>
+            <span id="release-label">Última versión disponible</span>
+            <span class="divider"></span>
+            <span>Android 6.0+</span>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal" aria-label="Vista previa de Biblia Diaria">
+          <div class="sun-shape" aria-hidden="true"></div>
+          <div class="leaf leaf-one" aria-hidden="true"></div>
+          <div class="leaf leaf-two" aria-hidden="true"></div>
+          <div class="phone">
+            <div class="phone-speaker"></div>
+            <div class="phone-screen">
+              <div class="app-topline">
+                <span>VATICAN NEWS</span>
+                <span class="date-pill">Mié 30⌄</span>
+              </div>
+              <h2>Palabra del día</h2>
+              <span class="app-button">Extras</span>
+              <p class="app-date">MIÉRCOLES, 30 DE SEPTIEMBRE</p>
+              <div class="liturgical-tag">SAN JERÓNIMO</div>
+              <div class="reading-card">
+                <div class="reading-meta">
+                  <span>01</span>
+                  <div><small>LECTURA DEL DÍA</small><strong>Libro de Job</strong></div>
+                  <span class="audio-icon">◖))</span>
+                </div>
+                <div class="rule"></div>
+                <p>Respondió Job a sus amigos: «Sé muy bien que es así: que el hombre no es justo ante Dios.»</p>
+                <p>Él es sabio de corazón y fuerte en poder. Su bondad renueva cada mañana.</p>
+              </div>
+              <div class="reading-card reading-card-second">
+                <div class="reading-meta">
+                  <span>02</span>
+                  <div><small>EVANGELIO DEL DÍA</small><strong>Lucas 9, 57–62</strong></div>
+                </div>
+              </div>
+              <span class="font-fab">Aa</span>
+            </div>
+          </div>
+          <div class="quote-card">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15h3l2-7H7l-1 7Zm8 0h3l2-7h-4l-1 7Z" /></svg>
+            <p>“Tu palabra es una lámpara para mis pasos.”</p>
+            <span>Salmo 119, 105</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="source-strip" aria-label="Fuente del contenido">
+        <span>Lecturas actualizadas cada día desde</span>
+        <strong><span class="source-cross">✣</span> Vatican News</strong>
+        <span>•</span>
+        <span>Disponible en español e inglés</span>
+      </section>
+
+      <section class="features section" id="funciones">
+        <div class="section-heading reveal">
+          <div class="eyebrow"><span></span> Diseñada para lo esencial</div>
+          <h2>La Palabra, <em>sin distracciones.</em></h2>
+          <p>Todo lo que necesitas para hacer de la lectura diaria un hábito sencillo y profundo.</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card feature-card-large reveal">
+            <div class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Zm16 0A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z" /></svg></div>
+            <span class="card-number">01</span>
+            <h3>Lecturas de cada día</h3>
+            <p>Primera lectura, Evangelio y reflexión papal organizados con claridad, siempre en la fecha correcta.</p>
+            <div class="mini-calendar" aria-hidden="true">
+              <div><span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+              <div><b>28</b><b>29</b><b class="today">30</b><b>1</b><b>2</b><b>3</b><b>4</b></div>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon coral"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9v6h4l5 4V5l-5 4H6Zm12 1.5c.7.9.7 2.1 0 3M20.5 8c1.8 2.3 1.8 5.7 0 8" /></svg></div>
+            <span class="card-number">02</span>
+            <h3>Escucha la Palabra</h3>
+            <p>Convierte las lecturas en audio y llévalas contigo mientras caminas, descansas o comienzas el día.</p>
+            <div class="audio-wave" aria-hidden="true">
+              <button>▶</button><span></span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon gold"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M7 7h10M8 21h8M6 12c-2 2-2 5 0 7M18 12c2 2 2 5 0 7" /></svg></div>
+            <span class="card-number">03</span>
+            <h3>Oraciones para cada momento</h3>
+            <p>Ángelus, Salve Regina, Veni Creator y otras oraciones para volver al centro cuando lo necesites.</p>
+            <div class="prayer-tags" aria-hidden="true"><span>Ángelus</span><span>Salve Regina</span><span>Veni Creator</span></div>
+          </article>
+
+          <article class="feature-card feature-card-wide reveal">
+            <div>
+              <div class="feature-icon plum"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5A7 7 0 0 1 12 3Z" /></svg></div>
+              <span class="card-number">04</span>
+              <h3>Hecha a tu medida</h3>
+              <p>Ajusta el tamaño de letra, cambia entre modo claro y oscuro, y lee en español o inglés.</p>
+            </div>
+            <div class="settings-preview" aria-hidden="true">
+              <div><small>TAMAÑO DE LETRA</small><span><b>A</b><i></i><strong>A</strong></span></div>
+              <div><small>APARIENCIA</small><span class="theme-pills"><b>☀ Claro</b><b>☾ Oscuro</b></span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="install section" id="instalar">
+        <div class="install-panel reveal">
+          <div class="install-copy">
+            <div class="eyebrow light"><span></span> Empieza hoy</div>
+            <h2>La Palabra puede acompañarte <em>donde estés.</em></h2>
+            <p>Descarga el APK, instálalo en tu Android y abre cada día un espacio para escuchar.</p>
+            <a class="button button-light" href="https://github.com/jahruz67/Bible-Daily/releases/download/latest/app-debug.apk">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" /></svg>
+              Descargar la app
+            </a>
+          </div>
+          <ol class="install-steps">
+            <li><span>1</span><div><strong>Descarga el archivo</strong><p>Toca el botón y guarda el APK en tu teléfono.</p></div></li>
+            <li><span>2</span><div><strong>Permite la instalación</strong><p>Android puede pedir permiso para instalar desde el navegador.</p></div></li>
+            <li><span>3</span><div><strong>Abre Biblia Diaria</strong><p>La lectura del día estará lista para ti.</p></div></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="closing section reveal">
+        <span class="closing-mark" aria-hidden="true">✣</span>
+        <blockquote>“Habla, Señor, que tu siervo escucha.”</blockquote>
+        <p>1 Samuel 3, 10</p>
+      </section>
+    </main>
+
+    <footer>
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 36 36"><path d="M8 7.5h13.5a6 6 0 0 1 6 6V29H14a6 6 0 0 1-6-6V7.5Z" /><path d="M14 7.5v15.8c0 3.2 2 5.7 5 5.7M20.7 12v8.2M16.6 16.1h8.2" /></svg>
+        </span>
+        <span>Biblia Diaria</span>
+      </a>
+      <p>Contenido diario proporcionado por Vatican News.</p>
+      <div><a href="https://github.com/jahruz67/Bible-Daily" target="_blank" rel="noreferrer">Código fuente</a><span>·</span><span id="copyright"></span></div>
+    </footer>
+  </body>
+</html>

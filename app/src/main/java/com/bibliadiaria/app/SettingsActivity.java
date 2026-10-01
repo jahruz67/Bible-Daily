@@ -1,17 +1,15 @@
 package com.bibliadiaria.app;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -45,10 +43,6 @@ public class SettingsActivity extends Activity {
     private TextView installedVersionText;
     private TextView checkButton;
     private TextView downloadButton;
-    private TextView voiceSubtitleText;
-    private TextView voiceButton;
-    private TextView ttsProviderButton;
-    private TextView mistralApiKeyButton;
     private UpdateManager.UpdateInfo latestInfo;
     private boolean isEnglish;
 
@@ -104,9 +98,7 @@ public class SettingsActivity extends Activity {
         content.addView(title, titleParams);
 
         content.addView(createLanguageCard());
-        content.addView(createTtsProviderCard());
-        content.addView(createVoiceCard());
-        content.addView(createMistralApiKeyCard());
+        content.addView(createSpeechCard());
         content.addView(createVersionCard());
 
         checkButton = actionButton(isEnglish ? "Check now" : "Comprobar", COLOR_ACCENT, Color.WHITE);
@@ -208,115 +200,57 @@ public class SettingsActivity extends Activity {
             langToggle.setText(!current ? "English" : "Español");
             isEnglish = !current;
             recreate();
-            updateVoiceCard();
         });
         card.addView(langToggle, new LinearLayout.LayoutParams(dp(100), dp(40)));
 
         return card;
     }
 
-    private View createTtsProviderCard() {
-        LinearLayout card = createCard();
-        card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-
-        LinearLayout copy = new LinearLayout(this);
-        copy.setOrientation(LinearLayout.VERTICAL);
-
-        TextView title = textView("TTS Provider", 20, ink(), Typeface.BOLD);
-        title.setIncludeFontPadding(false);
-        copy.addView(title);
-
-        TextView subtitle = textView("Choose between Gleez and Mistral TTS", 14, muted(), Typeface.NORMAL);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        subtitleParams.setMargins(0, dp(6), 0, 0);
-        copy.addView(subtitle, subtitleParams);
-
-        card.addView(copy, new LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
-        ));
-
-        ttsProviderButton = actionButton(getTtsProviderLabel(), COLOR_ACCENT, Color.WHITE);
-        ttsProviderButton.setOnClickListener(view -> showTtsProviderPicker());
-        card.addView(ttsProviderButton, new LinearLayout.LayoutParams(dp(140), dp(40)));
-
-        return card;
-    }
-
-    private View createVoiceCard() {
+    private View createSpeechCard() {
         LinearLayout card = createCard();
         card.setOrientation(LinearLayout.VERTICAL);
 
-        LinearLayout copy = new LinearLayout(this);
-        copy.setOrientation(LinearLayout.VERTICAL);
-
-        TextView title = textView("Voice", 20, ink(), Typeface.BOLD);
+        TextView title = textView(isEnglish ? "Text-to-speech" : "Texto a voz", 20, ink(), Typeface.BOLD);
         title.setIncludeFontPadding(false);
-        copy.addView(title);
+        card.addView(title);
 
-        voiceSubtitleText = textView("", 14, muted(), Typeface.NORMAL);
+        TextView subtitle = textView(
+                isEnglish
+                        ? "Readings use Android's built-in speech engine. Voice, speed, and downloaded languages are managed in your device settings."
+                        : "Las lecturas usan el motor de voz integrado de Android. La voz, la velocidad y los idiomas descargados se administran en los ajustes del dispositivo.",
+                14,
+                muted(),
+                Typeface.NORMAL
+        );
+        subtitle.setLineSpacing(dp(3), 1.08f);
         LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         subtitleParams.setMargins(0, dp(6), 0, 0);
-        copy.addView(voiceSubtitleText, subtitleParams);
+        card.addView(subtitle, subtitleParams);
 
-        card.addView(copy, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        voiceButton = actionButton("", COLOR_ACCENT, Color.WHITE);
-        voiceButton.setOnClickListener(view -> showVoicePicker());
+        TextView settingsButton = actionButton(
+                isEnglish ? "Device speech settings" : "Ajustes de voz del dispositivo",
+                COLOR_ACCENT,
+                Color.WHITE
+        );
+        settingsButton.setOnClickListener(view -> {
+            try {
+                startActivity(new Intent("com.android.settings.TTS_SETTINGS"));
+            } catch (Exception e) {
+                try {
+                    startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));
+                } catch (Exception ignored) {
+                }
+            }
+        });
         LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(42)
         );
         buttonParams.setMargins(0, dp(12), 0, 0);
-        card.addView(voiceButton, buttonParams);
-
-        updateVoiceCard();
-        return card;
-    }
-
-    private View createMistralApiKeyCard() {
-        LinearLayout card = createCard();
-        card.setOrientation(LinearLayout.VERTICAL);
-
-        LinearLayout copy = new LinearLayout(this);
-        copy.setOrientation(LinearLayout.VERTICAL);
-
-        TextView title = textView("Mistral API Key", 20, ink(), Typeface.BOLD);
-        title.setIncludeFontPadding(false);
-        copy.addView(title);
-
-        TextView subtitle = textView("Required for Mistral TTS (get from mistral.ai)", 14, muted(), Typeface.NORMAL);
-        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        subtitleParams.setMargins(0, dp(6), 0, 0);
-        copy.addView(subtitle, subtitleParams);
-
-        card.addView(copy, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        mistralApiKeyButton = actionButton(getMistralApiKeyLabel(), COLOR_ACCENT, Color.WHITE);
-        mistralApiKeyButton.setOnClickListener(view -> showMistralApiKeyDialog());
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(42)
-        );
-        buttonParams.setMargins(0, dp(12), 0, 0);
-        card.addView(mistralApiKeyButton, buttonParams);
+        card.addView(settingsButton, buttonParams);
 
         return card;
     }
@@ -392,122 +326,6 @@ public class SettingsActivity extends Activity {
         checkButton.setEnabled(true);
         checkButton.setAlpha(1f);
         statusText.setText("Could not check for updates. " + cleanMessage(error));
-    }
-
-    private void showVoicePicker() {
-        boolean english = UpdateManager.isEnglish(this);
-        String provider = UpdateManager.getTtsProvider(this);
-        UpdateManager.VoiceOption[] options = UpdateManager.getTtsVoiceOptions(english, provider);
-        String[] labels = new String[options.length];
-        for (int index = 0; index < options.length; index++) {
-            labels[index] = options[index].label;
-        }
-
-        int selectedIndex = UpdateManager.getTtsVoiceIndex(
-                english,
-                provider,
-                UpdateManager.getTtsVoice(this, english, provider)
-        );
-
-        new AlertDialog.Builder(this)
-                .setTitle(english ? "English voice" : "Spanish voice")
-                .setSingleChoiceItems(labels, selectedIndex, (dialog, which) -> {
-                    UpdateManager.setTtsVoice(this, english, provider, options[which].id);
-                    updateVoiceCard();
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void showTtsProviderPicker() {
-        String[] providers = {"Gleez", "Mistral"};
-        String currentProvider = UpdateManager.getTtsProvider(this);
-        int selectedIndex = currentProvider.equals(UpdateManager.TTS_PROVIDER_MISTRAL) ? 1 : 0;
-
-        new AlertDialog.Builder(this)
-                .setTitle("Select TTS Provider")
-                .setSingleChoiceItems(providers, selectedIndex, (dialog, which) -> {
-                    String provider = which == 1 ? UpdateManager.TTS_PROVIDER_MISTRAL : UpdateManager.TTS_PROVIDER_GLEEZE;
-                    UpdateManager.setTtsProvider(this, provider);
-                    ttsProviderButton.setText(getTtsProviderLabel());
-                    updateVoiceCard();
-                    dialog.dismiss();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private void showMistralApiKeyDialog() {
-        String currentKey = UpdateManager.getMistralApiKey(this);
-        String displayKey = currentKey.isEmpty() ? "" : "••••••••";
-
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        input.setHint("Enter your Mistral API key");
-        input.setText(currentKey);
-        input.setSelection(currentKey.length());
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(20), dp(20), dp(20), dp(20));
-        layout.addView(input, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        new AlertDialog.Builder(this)
-                .setTitle("Mistral API Key")
-                .setView(layout)
-                .setPositiveButton("Save", (dialog, which) -> {
-                    UpdateManager.setMistralApiKey(this, input.getText().toString().trim());
-                    mistralApiKeyButton.setText(getMistralApiKeyLabel());
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private String getTtsProviderLabel() {
-        String provider = UpdateManager.getTtsProvider(this);
-        return provider.equals(UpdateManager.TTS_PROVIDER_MISTRAL) ? "Mistral" : "Gleez";
-    }
-
-    private String getMistralApiKeyLabel() {
-        String apiKey = UpdateManager.getMistralApiKey(this);
-        if (apiKey.isEmpty()) {
-            return "Not configured";
-        }
-        return "••••••••";
-    }
-
-    private void updateVoiceCard() {
-        if (voiceSubtitleText == null || voiceButton == null) {
-            return;
-        }
-
-        boolean english = UpdateManager.isEnglish(this);
-        String provider = UpdateManager.getTtsProvider(this);
-        String voiceId = UpdateManager.getTtsVoice(this, english);
-        
-        // Update subtitle based on provider
-        if (provider.equals(UpdateManager.TTS_PROVIDER_MISTRAL)) {
-            voiceSubtitleText.setText(english
-                    ? "Mistral voices (requires API key)"
-                    : "Voces de Mistral (requiere clave API)");
-        } else {
-            voiceSubtitleText.setText(english
-                    ? "Gleez voices are shown while English is selected"
-                    : "Las voces de Gleez se muestran mientras el idioma esta seleccionado");
-        }
-        
-        voiceButton.setText(UpdateManager.getTtsVoiceLabel(english, provider, voiceId));
-        
-        // If Mistral is selected but API key is not configured, show a warning
-        if (provider.equals(UpdateManager.TTS_PROVIDER_MISTRAL) && !UpdateManager.isMistralConfigured(this)) {
-            voiceSubtitleText.setText(english
-                    ? "Mistral voices (requires API key - not configured!)"
-                    : "Voces de Mistral (requiere clave API - ¡no configurada!)");
-        }
     }
 
     private void updateInstalledVersionText() {
